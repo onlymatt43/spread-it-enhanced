@@ -22,7 +22,14 @@ const openai = new OpenAI({
 
 // Configuration Google Cloud Vision
 let visionClient;
-if (process.env.GOOGLE_CLOUD_PRIVATE_KEY) {
+if (process.env.GOOGLE_CLOUD_VISION_KEY) {
+  visionClient = new vision.ImageAnnotatorClient({
+    keyFilename: undefined, // Pas de fichier de clé
+    credentials: undefined, // Pas de credentials service account
+    apiKey: process.env.GOOGLE_CLOUD_VISION_KEY // Utiliser l'API key
+  });
+} else if (process.env.GOOGLE_CLOUD_PRIVATE_KEY) {
+  // Fallback vers service account si API key pas disponible
   visionClient = new vision.ImageAnnotatorClient({
     credentials: {
       type: "service_account",
