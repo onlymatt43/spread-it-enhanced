@@ -69,7 +69,7 @@ const upload = multer({
   storage: storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
   fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif|txt|doc|docx|pdf/;
+    const allowedTypes = /jpeg|jpg|png|gif|txt|doc|docx|pdf|mp4|mov/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
 
@@ -114,23 +114,29 @@ app.get('/create', (req, res) => {
 app.post('/create', upload.single('content_file'), async (req, res) => {
   try {
     let content = req.body.content || '';
-    let imagePath = null;
+    let mediaPath = null;
+    let mediaType = null;
 
     // Si un fichier est uploadé, extraire le contenu
     if (req.file) {
       if (req.file.mimetype.startsWith('image/')) {
-        imagePath = req.file.path;
+        mediaPath = req.file.path;
+        mediaType = 'image';
+      } else if (req.file.mimetype.startsWith('video/')) {
+        mediaPath = req.file.path;
+        mediaType = 'video';
       } else {
         content = await extractContentFromFile(req.file);
+        mediaType = 'document';
       }
     }
 
-    if (!content.trim() && !imagePath) {
-      return res.status(400).json({ error: 'Contenu ou image requis' });
+    if (!content.trim() && !mediaPath) {
+      return res.status(400).json({ error: 'Contenu, image ou vidéo requis' });
     }
 
     // Modération du contenu
-    const moderationResult = await moderateContent(content, imagePath);
+    const moderationResult = await moderateContent(content, mediaPath, mediaType);
     if (!moderationResult.safe) {
       return res.status(400).json({
         error: 'Contenu inapproprié détecté',
@@ -144,14 +150,14 @@ app.post('/create', upload.single('content_file'), async (req, res) => {
 
     // Générer les versions censurées si nécessaire
     let censoredContent = null;
-    let censoredImagePath = null;
+    let censoredMediaPath = null;
 
     if (moderationResult.score > 0) {
       censoredContent = censorText(aiResult.improved);
 
-      if (imagePath) {
-        censoredImagePath = imagePath.replace('.jpg', '_censored.jpg').replace('.png', '_censored.png');
-        await censorImage(imagePath, censoredImagePath);
+      if (mediaPath && mediaType === 'image') {
+        censoredMediaPath = mediaPath.replace('.jpg', '_censored.jpg').replace('.png', '_censored.png').replace('.gif', '_censored.gif');
+        await censorImage(mediaPath, censoredMediaPath);
       }
     }
 
@@ -169,8 +175,9 @@ app.post('/create', upload.single('content_file'), async (req, res) => {
       optimalTimes: optimalTimes,
       is_adult: moderationResult.score > 0,
       censored_content: censoredContent,
-      censored_image: censoredImagePath,
-      original_image: imagePath,
+      censored_media: censoredMediaPath,
+      original_media: mediaPath,
+      media_type: mediaType,
       createdAt: new Date()
     };
 
@@ -218,7 +225,7 @@ app.post('/share', async (req, res) => {
 
     for (const platform of platforms) {
       if (schedule === 'now') {
-        const platformResults = await shareToPlatform(platform, content, content.original_image);
+        const platformResults = await shareToPlatform(platform, content, content.original_media, content.media_type);
         results = { ...results, ...platformResults };
       } else {
         // Planifier le partage
@@ -303,7 +310,7 @@ async function extractContentFromFile(file) {
   throw new Error('Format de fichier non supporté pour l\'extraction de contenu');
 }
 
-async function moderateContent(content, imagePath = null) {
+async function moderateContent(content, mediaPath = null, mediaType = null) {
   let adultScore = 0;
   let reasons = [];
 
@@ -318,10 +325,10 @@ async function moderateContent(content, imagePath = null) {
     }
   });
 
-  // Analyse de l'image avec Google Vision
-  if (imagePath && visionClient && fs.existsSync(imagePath)) {
+  // Analyse de l'image avec Google Vision (uniquement pour les images)
+  if (mediaPath && mediaType === 'image' && visionClient && fs.existsSync(mediaPath)) {
     try {
-      const [result] = await visionClient.safeSearchDetection(imagePath);
+      const [result] = await visionClient.safeSearchDetection(mediaPath);
       const detections = result.safeSearchAnnotation;
 
       if (detections) {
@@ -522,29 +529,29 @@ function generateSocialContent(content) {
   };
 }
 
-async function shareToPlatform(platform, content, imagePath = null) {
+async function shareToPlatform(platform, content, mediaPath = null, mediaType = null) {
   const results = {};
 
   try {
     switch (platform) {
       case 'facebook':
-        results.facebook = await publishToFacebook(content, imagePath);
+        results.facebook = await publishToFacebook(content, mediaPath, mediaType);
         break;
 
       case 'instagram':
-        results.instagram = await publishToInstagram(content, imagePath);
+        results.instagram = await publishToInstagram(content, mediaPath, mediaType);
         break;
 
       case 'twitter':
-        results.twitter = await publishToTwitter(content, imagePath);
+        results.twitter = await publishToTwitter(content, mediaPath, mediaType);
         break;
 
       case 'linkedin':
-        results.linkedin = await publishToLinkedIn(content, imagePath);
+        results.linkedin = await publishToLinkedIn(content, mediaPath, mediaType);
         break;
 
       case 'tiktok':
-        results.tiktok = await publishToTikTok(content, imagePath);
+        results.tiktok = await publishToTikTok(content, mediaPath, mediaType);
         break;
     }
   } catch (error) {
@@ -555,9 +562,9 @@ async function shareToPlatform(platform, content, imagePath = null) {
   return results;
 }
 
-async function publishToFacebook(content, imagePath = null) {
+async function publishToFacebook(content, mediaPath = null, mediaType = null) {
   const pageId = process.env.FACEBOOK_PAGE_ID;
-  const accessToken = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
+  const accessToken = process.env.FACEBOOK_ACCESS_TOKEN;
 
   if (!pageId || !accessToken) {
     throw new Error('Configuration Facebook manquante');
@@ -568,31 +575,55 @@ async function publishToFacebook(content, imagePath = null) {
     access_token: accessToken
   };
 
-  // Si image, l'uploader d'abord
-  if (imagePath) {
-    // Optimiser l'image pour Facebook (1200x630 recommandé)
-    const optimizedImagePath = await optimizeImageForFacebook(imagePath);
-
-    // Upload de l'image
-    const uploadResponse = await axios.post(
-      `https://graph.facebook.com/v19.0/${pageId}/photos`,
-      {
-        source: fs.createReadStream(optimizedImagePath),
-        access_token: accessToken
-      },
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data'
+  // Si média, l'uploader d'abord
+  if (mediaPath && mediaType) {
+    if (mediaType === 'video') {
+      // Upload de la vidéo
+      const uploadResponse = await axios.post(
+        `https://graph.facebook.com/v19.0/${pageId}/videos`,
+        {
+          source: fs.createReadStream(mediaPath),
+          access_token: accessToken
+        },
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
         }
-      }
-    );
+      );
 
-    if (uploadResponse.data.id) {
-      postData = {
-        message: content.captions?.facebook || content.improved,
-        attached_media: [{ media_fbid: uploadResponse.data.id }],
-        access_token: accessToken
-      };
+      if (uploadResponse.data.id) {
+        postData = {
+          message: content.captions?.facebook || content.improved,
+          attached_media: [{ media_fbid: uploadResponse.data.id }],
+          access_token: accessToken
+        };
+      }
+    } else {
+      // Optimiser l'image pour Facebook (1200x630 recommandé)
+      const optimizedImagePath = await optimizeImageForFacebook(mediaPath);
+
+      // Upload de l'image
+      const uploadResponse = await axios.post(
+        `https://graph.facebook.com/v19.0/${pageId}/photos`,
+        {
+          source: fs.createReadStream(optimizedImagePath),
+          access_token: accessToken
+        },
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      );
+
+      if (uploadResponse.data.id) {
+        postData = {
+          message: content.captions?.facebook || content.improved,
+          attached_media: [{ media_fbid: uploadResponse.data.id }],
+          access_token: accessToken
+        };
+      }
     }
   }
 
@@ -608,30 +639,38 @@ async function publishToFacebook(content, imagePath = null) {
   };
 }
 
-async function publishToInstagram(content, imagePath = null) {
+async function publishToInstagram(content, mediaPath = null, mediaType = null) {
   const userId = process.env.INSTAGRAM_USER_ID;
   const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
 
-  if (!userId || !accessToken || !imagePath) {
-    throw new Error('Configuration Instagram manquante ou pas d\'image');
+  if (!userId || !accessToken || !mediaPath) {
+    throw new Error('Configuration Instagram manquante ou pas de média');
   }
 
-  // Créer le container média
-  const optimizedImagePath = await optimizeImageForInstagram(imagePath);
+  let containerData = {
+    caption: content.captions?.instagram || content.improved,
+    access_token: accessToken
+  };
+
+  // Créer le container média selon le type
+  if (mediaType === 'video') {
+    containerData.video_url = await uploadToTempStorage(mediaPath);
+  } else {
+    // Image par défaut
+    const optimizedImagePath = await optimizeImageForInstagram(mediaPath);
+    containerData.image_url = await uploadToTempStorage(optimizedImagePath);
+  }
 
   const containerResponse = await axios.post(
     `https://graph.facebook.com/v19.0/${userId}/media`,
-    {
-      image_url: await uploadToTempStorage(optimizedImagePath),
-      caption: content.captions?.instagram || content.improved,
-      access_token: accessToken
-    }
+    containerData
   );
 
   const containerId = containerResponse.data.id;
 
-  // Attendre que le média soit prêt
-  await new Promise(resolve => setTimeout(resolve, 5000));
+  // Attendre que le média soit prêt (plus long pour les vidéos)
+  const waitTime = mediaType === 'video' ? 15000 : 5000;
+  await new Promise(resolve => setTimeout(resolve, waitTime));
 
   // Publier le container
   const publishResponse = await axios.post(
@@ -649,7 +688,7 @@ async function publishToInstagram(content, imagePath = null) {
   };
 }
 
-async function publishToTwitter(content, imagePath = null) {
+async function publishToTwitter(content, mediaPath = null, mediaType = null) {
   // Simulation - utiliser twitter-api-v2 en production
   return {
     success: true,
@@ -658,7 +697,7 @@ async function publishToTwitter(content, imagePath = null) {
   };
 }
 
-async function publishToLinkedIn(content, imagePath = null) {
+async function publishToLinkedIn(content, mediaPath = null, mediaType = null) {
   // Simulation - utiliser LinkedIn API en production
   return {
     success: true,
@@ -667,7 +706,7 @@ async function publishToLinkedIn(content, imagePath = null) {
   };
 }
 
-async function publishToTikTok(content, imagePath = null) {
+async function publishToTikTok(content, mediaPath = null, mediaType = null) {
   // Simulation - utiliser TikTok API en production
   return {
     success: true,

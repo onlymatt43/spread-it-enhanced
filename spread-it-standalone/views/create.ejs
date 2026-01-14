@@ -149,8 +149,8 @@
                         <div class="file-upload-area" id="fileUploadArea">
                             <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
                             <p class="mb-2">Glissez-déposez votre fichier ici</p>
-                            <p class="text-muted small">Formats supportés: TXT, DOC, DOCX, PDF (max 10MB)</p>
-                            <input type="file" id="contentFile" name="content_file" accept=".txt,.doc,.docx,.pdf" style="display: none;">
+                            <p class="text-muted small">Formats supportés: TXT, DOC, DOCX, PDF, JPG, PNG, GIF, MP4, MOV (max 10MB)</p>
+                            <input type="file" id="contentFile" name="content_file" accept=".txt,.doc,.docx,.pdf,.jpg,.jpeg,.png,.gif,.mp4,.mov" style="display: none;">
                             <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('contentFile').click()">
                                 <i class="fas fa-folder-open me-1"></i>
                                 Parcourir
@@ -287,8 +287,20 @@
         });
 
         function updateFileDisplay(file) {
+            const fileType = file.type.split('/')[0]; // 'image', 'video', or 'text'
+            let iconClass = 'fas fa-file-alt';
+            let iconColor = 'text-success';
+
+            if (fileType === 'image') {
+                iconClass = 'fas fa-image';
+                iconColor = 'text-primary';
+            } else if (fileType === 'video') {
+                iconClass = 'fas fa-video';
+                iconColor = 'text-warning';
+            }
+
             fileUploadArea.innerHTML = `
-                <i class="fas fa-file-alt fa-3x text-success mb-3"></i>
+                <i class="${iconClass} fa-3x ${iconColor} mb-3"></i>
                 <p class="mb-2">${file.name}</p>
                 <p class="text-muted small">${(file.size / 1024 / 1024).toFixed(2)} MB</p>
                 <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearFile()">
@@ -303,7 +315,7 @@
             fileUploadArea.innerHTML = `
                 <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
                 <p class="mb-2">Glissez-déposez votre fichier ici</p>
-                <p class="text-muted small">Formats supportés: TXT, DOC, DOCX, PDF (max 10MB)</p>
+                <p class="text-muted small">Formats supportés: TXT, DOC, DOCX, PDF, JPG, PNG, GIF, MP4, MOV (max 10MB)</p>
                 <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('contentFile').click()">
                     <i class="fas fa-folder-open me-1"></i>
                     Parcourir
