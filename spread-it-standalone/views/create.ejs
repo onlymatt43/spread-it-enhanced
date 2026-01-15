@@ -243,6 +243,15 @@
                     <div id="socialPreviews"></div>
                 </div>
 
+                <div class="mb-4" id="trendingSection" style="display: none;">
+                    <h5>
+                        <i class="fas fa-fire-alt me-1"></i>
+                        Tendances à intégrer
+                    </h5>
+                    <div id="trendingHashtags" class="mb-2"></div>
+                    <div id="trendingKeywords" class="text-muted"></div>
+                </div>
+
                 <div class="text-center">
                     <button class="btn btn-success btn-lg" onclick="proceedToShare()">
                         <i class="fas fa-share me-2"></i>
@@ -381,6 +390,19 @@
                 </div>
             `).join('');
             document.getElementById('socialPreviews').innerHTML = socialHtml;
+
+              if (result.trending) {
+                  const hashtags = (result.trending.hashtags || []).slice(0, 10).map(tag =>
+                      `<span class="badge bg-warning text-dark me-2 mb-2">${tag}</span>`
+                  ).join('');
+                  const keywords = (result.trending.keywords || []).slice(0, 10).join(', ');
+
+                  document.getElementById('trendingHashtags').innerHTML = hashtags || '<span class="text-muted">Aucune donnée disponible</span>';
+                  document.getElementById('trendingKeywords').innerHTML = keywords ? `Mots-clés à favoriser : ${keywords}` : '';
+                  document.getElementById('trendingSection').style.display = 'block';
+              } else {
+                  document.getElementById('trendingSection').style.display = 'none';
+              }
 
             document.getElementById('resultSection').style.display = 'block';
             document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth' });

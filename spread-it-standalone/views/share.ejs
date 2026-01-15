@@ -122,6 +122,24 @@
                         <% }); %>
                     </small>
                 </div>
+                    <% if (content.trending) { %>
+                        <div class="mt-3">
+                            <small class="text-muted d-block mb-1">
+                                <i class="fas fa-fire-alt me-1"></i>
+                                Tendances actuelles à exploiter
+                            </small>
+                            <div>
+                                <% (content.trending.hashtags || []).slice(0, 10).forEach(tag => { %>
+                                    <span class="badge bg-warning text-dark me-1 mb-1"><%= tag %></span>
+                                <% }); %>
+                            </div>
+                            <% if ((content.trending.keywords || []).length) { %>
+                                <div class="mt-2 small text-muted">
+                                    Mots-clés : <%= content.trending.keywords.slice(0, 10).join(', ') %>
+                                </div>
+                            <% } %>
+                        </div>
+                    <% } %>
             </div>
 
             <div class="p-4">

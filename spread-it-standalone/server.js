@@ -10,6 +10,7 @@ const moment = require('moment');
 const vision = require('@google-cloud/vision');
 const sharp = require('sharp');
 const { MongoClient } = require('mongodb');
+const { fetchTrendingTopics } = require('./services/trending');
 
 // Charge d'abord .env.local (perso), puis .env (template) si présent
 const defaultEnvPath = path.join(__dirname, '.env');
@@ -206,8 +207,11 @@ app.post('/create', upload.single('content_file'), async (req, res) => {
       });
     }
 
+    // Tendance du moment pour enrichir le prompt
+    const trendingContext = await fetchTrendingTopics();
+
     // Amélioration du contenu avec IA
-    const aiResult = await improveContentWithAI(content, req.body);
+    const aiResult = await improveContentWithAI(content, req.body, trendingContext);
 
     // Générer les versions censurées si nécessaire
     let censoredContent = null;
@@ -234,6 +238,7 @@ app.post('/create', upload.single('content_file'), async (req, res) => {
       sentiment: aiResult.sentiment,
       seo_score: aiResult.seo_score,
       optimalTimes: optimalTimes,
+      trending: trendingContext,
       is_adult: moderationResult.score > 0,
       censored_content: censoredContent,
       censored_media: censoredMediaPath,
@@ -254,6 +259,7 @@ app.post('/create', upload.single('content_file'), async (req, res) => {
         captions: aiResult.captions,
         hashtags: aiResult.hashtags,
         optimalTimes: optimalTimes,
+        trending: trendingContext,
         moderation: moderationResult,
         censored: censoredContent ? {
           content: censoredContent,
@@ -503,8 +509,16 @@ function censorText(text) {
   return censoredText;
 }
 
-async function improveContentWithAI(content, options) {
+async function improveContentWithAI(content, options, trending = {}) {
   const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+
+  const trendingHashtags = Array.isArray(trending.hashtags) ? trending.hashtags.slice(0, 10) : [];
+  const trendingKeywords = Array.isArray(trending.keywords) ? trending.keywords.slice(0, 10) : [];
+  const trendingVocabulary = Array.isArray(trending.vocabulary) ? trending.vocabulary.slice(0, 10) : [];
+
+  const trendingBlock = (trendingHashtags.length || trendingKeywords.length || trendingVocabulary.length)
+    ? `\n**Tendances du moment :**\n- Hashtags populaires : ${trendingHashtags.join(', ') || 'Aucun'}\n- Thèmes dominants : ${trendingKeywords.join(', ') || 'Aucun'}\n- Vocabulaire à privilégier : ${trendingVocabulary.join(', ') || 'Aucun'}\n`
+    : '';
 
   const prompt = `Tu es un expert en marketing digital et création de contenu engageant.
 
@@ -517,6 +531,7 @@ ${content}
 - Style : ${options.style || 'sexy-bold-confident'}
 - Longueur : ${options.length || 'moyen'}
 - Mots-clés : ${options.keywords || 'aucun'}
+${trendingBlock}
 
 **Génère :**
 1. **Contenu amélioré** : Version corrigée et optimisée (garde le ton humain)

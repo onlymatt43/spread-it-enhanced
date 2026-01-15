@@ -81,6 +81,8 @@ build/
 
 # MongoDB data
 data/
+!spread-it-standalone/data/
+!spread-it-standalone/data/trending.json
 
 # Uploads
 uploads/
