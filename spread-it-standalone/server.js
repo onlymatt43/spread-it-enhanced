@@ -1,5 +1,6 @@
 const express = require('express');
 const session = require('express-session');
+const SQLiteStore = require('connect-sqlite3')(session);
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -14,6 +15,18 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Prépare un stockage persistant pour les sessions afin d'éviter la MemoryStore en production
+const sessionStorageDir = path.join(__dirname, 'storage');
+if (!fs.existsSync(sessionStorageDir)) {
+  fs.mkdirSync(sessionStorageDir, { recursive: true });
+}
+
+const sessionStore = new SQLiteStore({
+  dir: sessionStorageDir,
+  db: process.env.SESSION_DB_NAME || 'sessions.sqlite'
+});
 
 // Configuration OpenAI
 const openai = new OpenAI({
@@ -86,10 +99,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 app.use(session({
+  store: sessionStore,
   secret: process.env.SESSION_SECRET || 'spread-it-secret',
   resave: false,
-  saveUninitialized: true,
-  cookie: { secure: false } // À mettre à true en production avec HTTPS
+  saveUninitialized: false,
+  cookie: {
+    secure: isProduction,
+    sameSite: 'lax'
+  }
 }));
 
 // Configuration EJS
