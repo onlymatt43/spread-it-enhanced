@@ -316,7 +316,12 @@ async function moderateContent(content, mediaPath = null, mediaType = null) {
 
   // Analyse du texte
   const adultWords = (process.env.ADULT_WORDS || 'porn,xxx,explicit,nude,sex,nsfw,adult').split(',');
-  const lowerContent = content.toLowerCase();
+  const normalizedContent = typeof content === 'string'
+    ? content
+    : content === undefined || content === null
+      ? ''
+      : String(content);
+  const lowerContent = normalizedContent.toLowerCase();
 
   adultWords.forEach(word => {
     if (lowerContent.includes(word.trim())) {
@@ -492,7 +497,12 @@ async function analyzeOptimalPostingTimes(content) {
   // Simulation d'analyse basée sur le contenu
   const sentiment = require('sentiment');
   const sentimentAnalyzer = new sentiment();
-  const result = sentimentAnalyzer.analyze(content);
+  const normalizedContent = typeof content === 'string'
+    ? content
+    : content === undefined || content === null
+      ? ''
+      : String(content);
+  const result = sentimentAnalyzer.analyze(normalizedContent);
 
   // Logique simplifiée pour les horaires optimaux
   let times = [];
