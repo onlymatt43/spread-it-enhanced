@@ -242,17 +242,24 @@ app.post('/create', upload.single('content_file'), async (req, res) => {
       createdAt: new Date()
     };
 
-    res.json({
-      success: true,
-      content: aiResult.improved,
-      captions: aiResult.captions,
-      hashtags: aiResult.hashtags,
-      optimalTimes: optimalTimes,
-      moderation: moderationResult,
-      censored: censoredContent ? {
-        content: censoredContent,
-        image: censoredMediaPath
-      } : null
+    return req.session.save((sessionError) => {
+      if (sessionError) {
+        console.error('Erreur sauvegarde session:', sessionError);
+        return res.status(500).json({ error: 'Impossible de sauvegarder la session' });
+      }
+
+      res.json({
+        success: true,
+        content: aiResult.improved,
+        captions: aiResult.captions,
+        hashtags: aiResult.hashtags,
+        optimalTimes: optimalTimes,
+        moderation: moderationResult,
+        censored: censoredContent ? {
+          content: censoredContent,
+          image: censoredMediaPath
+        } : null
+      });
     });
 
   } catch (error) {
