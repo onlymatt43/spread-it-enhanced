@@ -190,7 +190,7 @@ app.post('/create', upload.single('content_file'), async (req, res) => {
       moderation: moderationResult,
       censored: censoredContent ? {
         content: censoredContent,
-        image: censoredImagePath
+        image: censoredMediaPath
       } : null
     });
 

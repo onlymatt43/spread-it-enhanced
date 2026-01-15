@@ -374,7 +374,7 @@
             `;
 
             // Afficher les aperçus sociaux
-            const socialHtml = Object.entries(result.social).map(([platform, content]) => `
+            const socialHtml = Object.entries(result.captions).map(([platform, content]) => `
                 <div class="social-preview">
                     <span class="platform-badge ${platform}">${platform.charAt(0).toUpperCase() + platform.slice(1)}</span>
                     <div class="mt-2">${content.replace(/\n/g, '<br>')}</div>
