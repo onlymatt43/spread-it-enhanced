@@ -26,6 +26,12 @@ if (fs.existsSync(localEnvPath)) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
+const runningOnRender = process.env.RENDER === 'true';
+
+const cookieSecure = process.env.SESSION_COOKIE_SECURE
+  ? process.env.SESSION_COOKIE_SECURE === 'true'
+  : runningOnRender;
+const cookieSameSite = process.env.SESSION_COOKIE_SAMESITE || 'lax';
 
 // Prépare un stockage persistant pour les sessions (fallback multi-stores)
 const sessionBaseDir = path.join(__dirname, 'storage');
@@ -141,8 +147,9 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: isProduction,
-    sameSite: 'lax'
+    secure: cookieSecure,
+    sameSite: cookieSameSite,
+    httpOnly: true
   }
 }));
 
