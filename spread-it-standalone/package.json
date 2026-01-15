@@ -18,6 +18,7 @@
     "ejs": "^3.1.9",
     "express-session": "^1.17.3",
     "connect-sqlite3": "^0.9.13",
+    "session-file-store": "^1.5.0",
     "twitter-api-v2": "^1.15.1",
     "node-cron": "^3.0.3",
     "moment": "^2.30.1",

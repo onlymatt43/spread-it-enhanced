@@ -1,6 +1,5 @@
 const express = require('express');
 const session = require('express-session');
-const SQLiteStore = require('connect-sqlite3')(session);
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -11,22 +10,60 @@ const moment = require('moment');
 const vision = require('@google-cloud/vision');
 const sharp = require('sharp');
 const { MongoClient } = require('mongodb');
-require('dotenv').config();
+
+// Charge d'abord .env.local (perso), puis .env (template) si présent
+const defaultEnvPath = path.join(__dirname, '.env');
+const localEnvPath = path.join(__dirname, '.env.local');
+
+if (fs.existsSync(defaultEnvPath)) {
+  require('dotenv').config({ path: defaultEnvPath });
+}
+
+if (fs.existsSync(localEnvPath)) {
+  require('dotenv').config({ path: localEnvPath, override: true });
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 
-// Prépare un stockage persistant pour les sessions afin d'éviter la MemoryStore en production
-const sessionStorageDir = path.join(__dirname, 'storage');
-if (!fs.existsSync(sessionStorageDir)) {
-  fs.mkdirSync(sessionStorageDir, { recursive: true });
+// Prépare un stockage persistant pour les sessions (fallback multi-stores)
+const sessionBaseDir = path.join(__dirname, 'storage');
+if (!fs.existsSync(sessionBaseDir)) {
+  fs.mkdirSync(sessionBaseDir, { recursive: true });
 }
 
-const sessionStore = new SQLiteStore({
-  dir: sessionStorageDir,
-  db: process.env.SESSION_DB_NAME || 'sessions.sqlite'
-});
+let sessionStore;
+let sessionStoreName = 'memory';
+
+try {
+  const SQLiteStore = require('connect-sqlite3')(session);
+  sessionStore = new SQLiteStore({
+    dir: sessionBaseDir,
+    db: process.env.SESSION_DB_NAME || 'sessions.sqlite'
+  });
+  sessionStoreName = 'sqlite';
+} catch (sqliteError) {
+  console.warn('SQLite session store indisponible, fallback sur un store fichier:', sqliteError.message);
+  try {
+    const FileStore = require('session-file-store')(session);
+    const fileStorePath = path.join(sessionBaseDir, 'sessions');
+    if (!fs.existsSync(fileStorePath)) {
+      fs.mkdirSync(fileStorePath, { recursive: true });
+    }
+    sessionStore = new FileStore({
+      path: fileStorePath,
+      retries: 1
+    });
+    sessionStoreName = 'file';
+  } catch (fileError) {
+    console.warn('Store fichier indisponible, fallback sur MemoryStore (non persistant):', fileError.message);
+    sessionStore = new session.MemoryStore();
+    sessionStoreName = 'memory';
+  }
+}
+
+console.info(`Session store initialisé (${sessionStoreName}).`);
 
 // Configuration OpenAI
 const openai = new OpenAI({
