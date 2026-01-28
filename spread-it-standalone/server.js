@@ -947,9 +947,12 @@ cron.schedule('* * * * *', () => {
   console.log('Vérification des partages planifiés...');
 });
 
-// Démarrage du serveur
-app.listen(PORT, () => {
-  console.log(`Spread It server running on port ${PORT}`);
-});
+
+// Démarrage du serveur si on n'est pas en mode test
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Spread It server running on port ${PORT}`);
+  });
+}
 
 module.exports = app;
