@@ -90,17 +90,16 @@
             // Pin to Top-Right Corner (Fixed Positioning)
             // No need for scrollTop since it's position:fixed relative to viewport
             const btnSize = 60;
+            // Get coordinates relative to VIEWPORT (viewport coordinates)
             let top = rect.top + 10;
             let left = rect.right - btnSize - 10;
             
-            // Safety check: don't show if element is off-screen
-            if (top < 0 || left < 0 || rect.bottom < 0 || rect.right < 0) {
-                 hideButton();
-                 return;
-            }
+            // Safety check: is it off-screen? 
+            if (top < 0) top = 10; 
+            if (left > window.innerWidth - btnSize) left = window.innerWidth - btnSize - 10;
             
-            // Adjust if hidden by header
-            if (top < 60) top = rect.bottom - 70; 
+            // Force z-index high
+            btn.style.zIndex = "2147483647";
 
             btn.style.top = `${top}px`;
             btn.style.left = `${left}px`;
