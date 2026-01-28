@@ -141,24 +141,31 @@
             let found = null;
             
             for (let el of els) {
-                // Direct check
+                // 1. Direct check
                 if (isValideMedia(el)) {
                     found = el;
                     break;
                 }
-                // Wrapper check (Deep Scan Lite) - Helps if image is wrapped in a tight div/link
-                if (el.tagName === 'A' || el.tagName === 'div') {
-                    const img = el.querySelector('img, video');
-                    // Only use if the img is actually large enough
-                    if (img && isValideMedia(img)) {
-                         // Verify the image is actually under the cursor roughly
-                         const r = img.getBoundingClientRect();
-                         if (e.clientX >= r.left && e.clientX <= r.right && 
-                             e.clientY >= r.top && e.clientY <= r.bottom) {
-                             found = img;
-                             break;
-                         }
+                
+                // 2. Deep Scan (Maximum Robustness)
+                // Check if this element WRAPS a media element that is physically under the cursor
+                // We check commonly used wrappers: Divs, Links, Sections, Spans, Figures, Pictures
+                if (['DIV', 'A', 'SECTION', 'SPAN', 'FIGURE', 'PICTURE', 'LI'].includes(el.tagName)) {
+                    // Find all potential media inside
+                    const potentials = el.querySelectorAll('img, video, iframe');
+                    for (let p of potentials) {
+                        if (isValideMedia(p)) {
+                             // Precise Geometry Check
+                             // Does the cursor coordinates fall inside this child media?
+                             const r = p.getBoundingClientRect();
+                             if (e.clientX >= r.left && e.clientX <= r.right && 
+                                 e.clientY >= r.top && e.clientY <= r.bottom) {
+                                 found = p;
+                                 break;
+                             }
+                        }
                     }
+                    if (found) break;
                 }
             }
 
