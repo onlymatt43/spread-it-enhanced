@@ -325,7 +325,7 @@
                 <video src="<%= data.video %>" class="ig-preview-img" controls></video>
             <% } else { %>
                 <img src="<%= data.image %>" class="ig-preview-img" alt="">
-            <% } %
+            <% } %>
                 <span class="text-muted">Create new post</span>
                 <span class="text-primary fw-bold" onclick="spreadIt('instagram')">Share</span>
             </div>
@@ -344,16 +344,15 @@
                 <button class="tw-btn spread-pulse" onclick="spreadIt('twitter')">Post</button>
                 <div style="clear:both"></div>
             </div>
-            <div cla
+            <div class="tw-body">
+                <div class="fb-avatar" style="width:48px;height:48px;"></div>
+                <div class="tw-input-area">
+                    <textarea class="tw-textarea" rows="3" placeholder="What is happening?"><%= data.text %></textarea>
                     <% if (data.video) { %>
                         <video src="<%= data.video %>" controls style="width:100%; border-radius:16px; border:1px solid #eee;"></video>
                     <% } else { %>
                         <img src="<%= data.image %>" style="width:100%; border-radius:16px; border:1px solid #eee;" alt="">
-                    <% } %
-                <div class="fb-avatar" style="width:48px;height:48px;"></div>
-                <div class="tw-input-area">
-                    <textarea class="tw-textarea" rows="3" placeholder="What is happening?"><%= data.text %></textarea>
-                    <img src="<%= data.image %>" style="width:100%; border-radius:16px; border:1px solid #eee;" alt="">
+                    <% } %>
                     
                     <div class="ai-assistant mt-3">
                         <span class="ai-btn" onclick="enhanceText('twitter')">Shorten & Optimize</span>
@@ -361,11 +360,6 @@
                 </div>
             </div>
         </div>
-% if (data.video) { %>
-                    <video src="<%= data.video %>" controls style="width:100%; border-radius:8px;"></video>
-                <% } else { %>
-                    <img src="<%= data.image %>" alt="">
-                <% } %
         <!-- LinkedIn Mockup (Reusing FB minimal style for now) -->
         <div id="linkedin-mockup" class="mockup fb-mockup">
              <div class="fb-header">
