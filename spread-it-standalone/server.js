@@ -12,6 +12,7 @@ const sharp = require('sharp');
 const { MongoClient } = require('mongodb');
 const { fetchTrendingTopics } = require('./services/trending');
 const { TwitterApi } = require('twitter-api-v2'); // Ajout pour Twitter
+const FormData = require('form-data'); // Ajout pour Facebook Upload
 
 // Nouveaux Services d'Intelligence
 const Strategist = require('./services/strategist');
@@ -266,43 +267,50 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
              // --- FACEBOOK PAGE ---
              if (platform === 'facebook') {
                  const fbToken = process.env.FACEBOOK_ACCESS_TOKEN || process.env.INSTAGRAM_ACCESS_TOKEN; 
-                 // Note: Often IG token works for FB if scopes are correct
                  
                  if (!fbToken || !process.env.FACEBOOK_PAGE_ID) {
                       return { success: false, platform, error: "Missing FACEBOOK_ACCESS_TOKEN or PAGE_ID" };
                  }
 
-                 // Use standard Graph API (photos edge)
-                 // Requires a publicly accessible URL usually, but we can upload form-data using fs
-                 // For simplicity here, we use the library or axios with formData if we want to upload the local file.
-                 // Actually, Graph API supports 'url' param if the image is public.
-                 // Since we have a local file downloaded, let's try to upload the binary.
-                 
-                 const formData = new FormData();
-                 formData.append('access_token', fbToken);
-                 formData.append('message', caption + '\n\n' + hashtags);
-                 
-                 // Note: 'fs.createReadStream' with axios sometimes requires 'form-data' package
-                 // We will try the 'url' method if available, else we need 'form-data' lib.
-                 // Assuming 'mediaUrl' is public (since we downloaded it from somewhere).
-                 
-                 let fbEndpoint = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
-                 let payload = {
-                    access_token: fbToken,
-                    message: caption + '\n\n' + hashtags
-                 };
+                 console.log("📘 Uploading directly to Facebook (Binary mode)...");
 
-                 if (mediaType === 'image') {
-                     fbEndpoint = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/photos`;
-                     payload.url = mediaUrl; // Hope it is public
-                 } else if (mediaType === 'video') {
-                     // Video is more complex (start, finish), skipping for simple impl or using link
-                     fbEndpoint = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
-                     payload.link = mediaUrl; 
+                 // METHODE ROBUSTE: Upload de fichier binaire via FormData
+                 // Cela évite que Facebook bloque l'URL si elle n'est pas parfaite
+                 
+                 if (mediaType === 'image' && tempFilePath) {
+                     const form = new FormData();
+                     form.append('access_token', fbToken);
+                     form.append('message', caption + '\n\n' + hashtags);
+                     form.append('source', fs.createReadStream(tempFilePath)); 
+
+                     // Appel API "photos" en mode multipart/form-data
+                     const fbResponse = await axios.post(
+                         `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/photos`,
+                         form,
+                         { headers: form.getHeaders() }
+                     );
+                     
+                     return { success: true, platform, id: fbResponse.data.id };
+                 } 
+                 
+                 // Fallback pour vidéo (plus complexe en binaire) ou si pas de fichier local
+                 else {
+                     let fbEndpoint = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
+                     let payload = {
+                        access_token: fbToken,
+                        message: caption + '\n\n' + hashtags
+                     };
+
+                     if (mediaType === 'image') {
+                         fbEndpoint = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/photos`;
+                         payload.url = mediaUrl; 
+                     } else if (mediaType === 'video') {
+                         payload.link = mediaUrl; 
+                     }
+
+                     const response = await axios.post(fbEndpoint, payload);
+                     return { success: true, platform, id: response.data.id };
                  }
-
-                 const response = await axios.post(fbEndpoint, payload);
-                 return { success: true, platform, id: response.data.id };
              }
 
              // --- INSTAGRAM BUSINESS ---
