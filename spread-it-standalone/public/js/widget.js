@@ -46,8 +46,29 @@
                 border-radius: 50%;
                 pointer-events: none;
             }
+            .spread-it-debug {
+                position: fixed;
+                bottom: 10px;
+                right: 10px;
+                background: #333;
+                color: #fff;
+                padding: 10px;
+                border-radius: 5px;
+                z-index: 2147483647;
+                font-family: sans-serif;
+                font-size: 12px;
+                pointer-events: none;
+                opacity: 0.8;
+            }
         `;
         document.head.appendChild(style);
+
+        // Debug Indicator
+        const debug = document.createElement('div');
+        debug.className = 'spread-it-debug';
+        debug.innerText = 'Spread It: Active';
+        document.body.appendChild(debug);
+        setTimeout(() => debug.remove(), 5000); // Hide after 5s
 
         // Create the button element once
         const btn = document.createElement('div');
