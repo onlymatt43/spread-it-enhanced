@@ -11,37 +11,30 @@
             top: 10px;
             left: 10px;
             z-index: 10000;
-            background: linear-gradient(45deg, #667eea, #764ba2);
-            color: white;
-            padding: 8px 12px;
-            border-radius: 20px;
-            font-family: 'Segoe UI', sans-serif;
-            font-size: 14px;
-            font-weight: 600;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
             cursor: pointer;
             opacity: 0;
             transition: opacity 0.3s ease, transform 0.2s ease;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            pointer-events: none; /* Let clicks pass through initially */
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            pointer-events: none;
+            overflow: hidden;
+            background: black;
+            border: 2px solid white;
         }
         .spread-it-overlay-btn.visible {
             opacity: 1;
             pointer-events: auto;
         }
         .spread-it-overlay-btn:hover {
-            transform: scale(1.05);
+            transform: scale(1.1);
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.6);
         }
-        .spread-it-wrapper {
-            position: relative;
-            display: inline-block;
-        }
-        .spread-it-icon {
-            width: 16px;
-            height: 16px;
-            background: white;
+        .spread-it-video-btn {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
             border-radius: 50%;
         }
     `;
@@ -50,7 +43,8 @@
     // Create the button element once
     const btn = document.createElement('div');
     btn.className = 'spread-it-overlay-btn';
-    btn.innerHTML = '<span class="spread-it-icon"></span> Spread It';
+    // Use the video as the button content
+    btn.innerHTML = `<video src="${BASE_URL}/assets/logo-video-spread-it.mp4" autoplay loop muted playsinline class="spread-it-video-btn"></video>`;
     document.body.appendChild(btn);
 
     let activeElement = null;
