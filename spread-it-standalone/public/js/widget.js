@@ -230,9 +230,10 @@
 
             const pageUrl = window.location.href;
             const pageTitle = document.title;
-            const altText = activeElement.alt || activeElement.getAttribute('aria-label') || '';
-            const isVideo = activeElement.tagName === 'VIDEO';
+            const altText = activeElement.alt || activeElement.getAttribute('aria-label') || activeElement.title || '';
+            const isVideo = activeElement.tagName === 'VIDEO' || activeElement.tagName === 'IFRAME';
 
+            // Determine if we should query 'video' or 'image'
             const params = new URLSearchParams({
                 [isVideo ? 'video' : 'image']: mediaUrl,
                 source: pageUrl,
