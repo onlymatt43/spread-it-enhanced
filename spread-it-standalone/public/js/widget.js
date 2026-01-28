@@ -115,29 +115,42 @@
         }, 100);
 
         // Event Delegation
-        document.addEventListener('mouseover', function(e) {
-            const el = e.target;
+        document.addEventListener('mousemove', function(e) {
+            // Optimization: Only run every few frames or if mouse moved significantly?
+            // For now, simple check.
             
-            // Handle Images & Videos
-            if (el.tagName === 'IMG' || el.tagName === 'VIDEO') {
-                const width = el.tagName === 'VIDEO' ? el.videoWidth : el.width;
-                const height = el.tagName === 'VIDEO' ? el.videoHeight : el.height;
-                const offsetW = el.offsetWidth;
+            // "X-Ray" Detection: Check all elements under the cursor
+            const elements = document.elementsFromPoint(e.clientX, e.clientY);
+            let targetMedia = null;
 
-                // Check size
-                if ((width > MIN_IMAGE_SIZE && height > MIN_IMAGE_SIZE) || (offsetW > MIN_IMAGE_SIZE)) {
-                    if (hideTimeout) clearTimeout(hideTimeout);
+            for (let el of elements) {
+                if (el.tagName === 'IMG' || el.tagName === 'VIDEO') {
+                    // Check sizing
+                    const width = el.tagName === 'VIDEO' ? el.videoWidth : el.naturalWidth || el.width;
+                    const height = el.tagName === 'VIDEO' ? el.videoHeight : el.naturalHeight || el.height;
+                    const offsetW = el.offsetWidth;
                     
-                    activeElement = el;
-                    positionButton(el);
-                    
+                    if ((width > MIN_IMAGE_SIZE && height > MIN_IMAGE_SIZE) || (offsetW > MIN_IMAGE_SIZE)) {
+                         targetMedia = el;
+                         break; // Found the top-most media
+                    }
+                }
+            }
+
+            if (targetMedia) {
+                if (hideTimeout) clearTimeout(hideTimeout);
+                
+                // Only reposition if we switched targets or button is hidden
+                if (activeElement !== targetMedia || !btn.classList.contains('visible')) {
+                    activeElement = targetMedia;
+                    positionButton(targetMedia);
                     btn.classList.add('visible');
                     btn.style.opacity = '1';
                     btn.style.pointerEvents = 'auto';
                 }
             } 
             // Handle hovering the button itself
-            else if (el === btn || btn.contains(el)) {
+            else if (e.target === btn || btn.contains(e.target)) {
                 if (hideTimeout) clearTimeout(hideTimeout);
                 
                 btn.classList.add('visible');
@@ -146,14 +159,17 @@
             } 
             // Handle hovering off
             else {
-                // If we moved off the image AND the button, hide after delay
-                hideTimeout = setTimeout(() => {
-                    btn.classList.remove('visible');
-                    btn.style.opacity = '0';
-                    btn.style.pointerEvents = 'none';
-                }, 300);
+                // If we are not over media and not over button, plan to hide
+                if (!hideTimeout && btn.classList.contains('visible')) {
+                    hideTimeout = setTimeout(() => {
+                        btn.classList.remove('visible');
+                        btn.style.opacity = '0';
+                        btn.style.pointerEvents = 'none';
+                        hideTimeout = null;
+                    }, 300);
+                }
             }
-        }, true); // Use capture to ensure we see events
+        }, { passive: true }); // Passive for better scroll performance
 
         // Handle Scroll
         window.addEventListener('scroll', () => {
