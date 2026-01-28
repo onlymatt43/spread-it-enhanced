@@ -16,9 +16,6 @@ const { fetchTrendingTopics } = require('./services/trending');
 const Strategist = require('./services/strategist');
 const VideoAI = require('./services/video-ai');
 
-// Serve static files (including widget.js)
-app.use(express.static('public'));
-
 // Configure layout if using ejs-layouts
 // const expressLayouts = require('express-ejs-layouts');
 // app.use(expressLayouts);
@@ -36,6 +33,10 @@ if (fs.existsSync(localEnvPath)) {
 }
 
 const app = express();
+
+// Serve static files (including widget.js)
+app.use(express.static('public'));
+
 const PORT = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 const runningOnRender = process.env.RENDER === 'true';
