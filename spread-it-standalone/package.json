@@ -24,6 +24,7 @@
     "moment": "^2.30.1",
     "sentiment": "^5.0.2",
     "@google-cloud/vision": "^4.0.2",
+    "@google-cloud/video-intelligence": "^5.2.0",
     "sharp": "^0.33.0",
     "canvas": "^2.11.2",
     "mongodb": "^6.3.0",
