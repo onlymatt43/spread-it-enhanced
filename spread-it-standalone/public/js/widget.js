@@ -116,17 +116,16 @@
             
             if (tag === 'IFRAME') {
                 try {
-                    // Similar checks as before
                      const src = (el.src || '').toLowerCase();
+                     // Strict check: Only attach to known video players.
+                     // We intentionally exclude generic iframes (like Vercel galleries) because we can't access their internal videos.
                      if (src.includes('youtube') || src.includes('vimeo') || src.includes('player') || 
                          src.includes('embed') || src.includes('twitch') || src.includes('dailymotion')) {
                          return true;
                      }
-                     // Fallback size check for things like Vercel gallery IF it looks media-like?
-                     // Let's rely on explicit player detection mainly to avoid ads
-                     if (w > 250 && h > 150) return true; 
+                     return false; 
                 } catch(e) {
-                     return (w > 250 && h > 150); // Fallback
+                     return false;
                 }
             }
             return false;
