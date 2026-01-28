@@ -458,16 +458,55 @@ function spreadIt(platform) {
     const content = container.querySelector('textarea').value;
     const btn = container.querySelector('button') || container.querySelector('.text-primary'); // For IG
     
+    if (!btn) return;
+
     const originalText = btn.innerText;
     btn.innerText = 'Spreading...';
+    btn.style.opacity = '0.7';
+    btn.style.pointerEvents = 'none';
     
-    // Simulate API call
-    setTimeout(() => {
-        alert('Successfully spread to ' + platform + '!\n\nContent:\n' + content);
-        btn.innerText = 'Spread Done!';
-        // Optional: Close window
-        // window.close();
-    }, 1500);
+    // payload
+    const payload = {
+        mediaUrl: "<%= data.video || data.image %>",
+        mediaType: "<%= data.video ? 'video' : 'image' %>",
+        caption: content,
+        platforms: [platform], 
+        hashtags: []
+    };
+
+    // Actual API Call
+    fetch('/api/smart-share-submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(res => res.json())
+    .then(data => {
+        btn.style.pointerEvents = 'auto';
+        btn.style.opacity = '1';
+
+        if (data.success) {
+            btn.innerText = 'Published!';
+            alert("✅ Successfully published to " + platform + "!");
+        } else {
+            console.error(data.errors);
+            btn.innerText = 'Failed';
+            let msg = data.message;
+            if (data.errors && data.errors.length > 0) {
+                msg += "\n\nErrors:\n" + data.errors.map(e => `- ${e.platform}: ${e.error}`).join('\n');
+            }
+            alert("⚠️ " + msg);
+            // Revert text after a delay so they can try again
+            setTimeout(() => btn.innerText = originalText, 3000);
+        }
+    })
+    .catch(err => {
+        console.error("Fetch error:", err);
+        btn.style.pointerEvents = 'auto';
+        btn.style.opacity = '1';
+        btn.innerText = 'Error';
+        alert("❌ Network/Server Error: " + err.message);
+    });
 }
 </script>
 
