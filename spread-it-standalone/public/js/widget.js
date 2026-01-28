@@ -1,6 +1,6 @@
 (function() {
     function initSpreadIt() {
-        console.log("🚀 Spread It Widget Initializing...");
+        console.log("🚀 Spread It Widget - Click Mode Active...");
         
         // Configuration
         const BASE_URL = (window.spreadItConfig && window.spreadItConfig.baseUrl) || 
@@ -10,55 +10,27 @@
             console.error("Spread It: Could not determine Base URL");
             return;
         }
-        console.log("Spread It Base URL:", BASE_URL);
-
-        const MIN_IMAGE_SIZE = 150; 
 
         // Styles
         const style = document.createElement('style');
         style.textContent = `
-            .spread-it-overlay-btn {
+            .spread-it-clickable {
+                cursor: pointer !important;
+                transition: transform 0.2s ease, box-shadow 0.2s ease;
+            }
+            .spread-it-clickable:hover {
+                transform: scale(1.02);
+                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            }
+            .spread-it-iframe-overlay {
                 position: absolute;
-                z-index: 2147483647 !important;
-                width: 80px;
-                height: 80px;
-                border-radius: 50%;
+                background: rgba(0,0,0,0);
                 cursor: pointer;
-                opacity: 0;
-                transition: opacity 0.3s ease, transform 0.2s ease;
-                box-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
-                background: #000;
-                border: 2px solid white;
-                display: block !important;
+                z-index: 1000;
             }
-            .spread-it-overlay-btn.visible {
-                opacity: 1 !important;
-                pointer-events: auto !important;
-            }
-            .spread-it-overlay-btn:hover {
-                transform: scale(1.1);
-                box-shadow: 0 0 30px rgba(102, 126, 234, 0.8);
-            }
-            .spread-it-video-btn {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-                border-radius: 50%;
-                pointer-events: none;
-            }
-            .spread-it-debug {
-                position: fixed;
-                bottom: 10px;
-                right: 10px;
-                background: #333;
-                color: #fff;
-                padding: 10px;
-                border-radius: 5px;
-                z-index: 2147483647;
-                font-family: sans-serif;
-                font-size: 12px;
-                pointer-events: none;
-                opacity: 0.8;
+            .spread-it-iframe-overlay:hover {
+                background: rgba(102, 126, 234, 0.1); /* Subtle hint */
+                border: 3px solid #667eea;
             }
         `;
         document.head.appendChild(style);
@@ -66,201 +38,97 @@
         // Debug Indicator
         const debug = document.createElement('div');
         debug.className = 'spread-it-debug';
-        debug.innerText = 'Spread It: Active';
+        debug.style.cssText = "position: fixed; bottom: 10px; right: 10px; background: #333; color: #fff; padding: 10px; border-radius: 5px; z-index: 999999; font-family: sans-serif; font-size: 12px; pointer-events: none; opacity: 0.8;";
+        debug.innerText = 'Spread It: Click Mode';
         document.body.appendChild(debug);
-        setTimeout(() => debug.remove(), 5000); // Hide after 5s
+        setTimeout(() => debug.remove(), 5000); 
 
-        // Create the button element once
-        const btn = document.createElement('div');
-        btn.id = 'spread-it-share-btn';
-        btn.className = 'spread-it-overlay-btn';
-        btn.style.opacity = '0'; // Default hidden
-        btn.style.pointerEvents = 'none'; // Default no pointer events
-        
-        const videoSrc = `${BASE_URL}/assets/logo-video-spread-it.mp4`;
-        
-        btn.innerHTML = `
-            <video src="${videoSrc}" autoplay loop muted playsinline class="spread-it-video-btn" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'"></video>
-            <div style="display:none; width:100%; height:100%; background: linear-gradient(45deg, #667eea, #764ba2); color:white; align-items:center; justify-content:center; font-weight:bold; font-size:12px; text-align:center;">Spread<br>It</div>
-        `;
-        
-        document.body.appendChild(btn);
+        // Helper: Init Click Logic on Media
+        function makeMediaClickable() {
+            // IMAGES & VIDEOS
+            const visualMedia = document.querySelectorAll('img, video');
+            visualMedia.forEach(el => {
+                // Ignore small icons/logos
+                if (el.offsetWidth < 150 || el.offsetHeight < 150) return;
+                
+                if (!el.classList.contains('spread-it-clickable')) {
+                    el.classList.add('spread-it-clickable');
+                    el.addEventListener('click', (e) => handleMediaClick(e, el));
+                }
+            });
 
-        let activeElement = null;
-        let hideTimeout = null;
+            // IFRAMES (Youtube/Vimeo Players Only)
+            // We use a safe heuristic to only overlay obvious players, NOT general apps (like Vercel galleries) if possible.
+            // But if the Vercel gallery is the target, we CAN overlay it if it matches criteria.
+            const iframes = document.querySelectorAll('iframe');
+            iframes.forEach(el => {
+                // Skip if already handled
+                if (el.parentElement.querySelector('.spread-it-iframe-overlay')) return;
+                
+                const w = el.offsetWidth;
+                const h = el.offsetHeight;
+                if (w < 200 || h < 150) return;
 
-        // Function to calculate position
-        function positionButton(el) {
-            const rect = el.getBoundingClientRect();
-            
-            // Don't show if off screen
-            if (rect.bottom < 0 || rect.top > window.innerHeight) return;
+                // Check Src
+                const src = (el.src || '').toLowerCase();
+                const isPlayer = src.includes('youtube') || src.includes('vimeo') || src.includes('player') || 
+                                 src.includes('embed') || src.includes('twitch') || src.includes('dailymotion');
 
-            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-            const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
-
-            // Compute position
-            const topPos = rect.top + scrollTop + 20;
-            const leftPos = rect.right + scrollLeft - 100;
-
-            btn.style.top = topPos + 'px';
-            btn.style.left = leftPos + 'px';
+                // If it looks like a player, overlay it
+                if (isPlayer) {
+                    const overlay = document.createElement('div');
+                    overlay.className = 'spread-it-iframe-overlay';
+                    
+                    // Position overlay over iframe
+                    // We need relative positioning context usually, simplest is to use rects but those change on scroll.
+                    // Best approach: wrap the iframe? No, breaks layout.
+                    // Insert sibling and position absolutely relative to parent (assuming parent is relative).
+                    // Or set dimensions matches.
+                    
+                    // Simple approach: Set exact size and margin matching
+                    const rect = el.getBoundingClientRect();
+                    // This is hard to sync on scroll.
+                    // Better: use a wrapper if possible? 
+                    // Let's assume the iframe is in a container.
+                    
+                    // Actually, easiest way is to bind the click on the Iframe's PARENT if it's tight.
+                    // But parents are often loose usually.
+                    
+                    // Let's try wrapping (safe if display block)
+                    const wrapper = document.createElement('div');
+                    wrapper.style.position = 'relative';
+                    wrapper.style.display = 'inline-block';
+                    // Move iframe into wrapper
+                    el.parentNode.insertBefore(wrapper, el);
+                    wrapper.appendChild(el);
+                    
+                    // Add overlay to wrapper
+                    wrapper.appendChild(overlay);
+                    overlay.style.top = '0';
+                    overlay.style.left = '0';
+                    overlay.style.width = '100%';
+                    overlay.style.height = '100%';
+                    
+                    overlay.addEventListener('click', (e) => handleMediaClick(e, el));
+                }
+            });
         }
 
-        // Checking Loop
-        setInterval(() => {
-            if (activeElement && btn.classList.contains('visible')) {
-                positionButton(activeElement);
-            }
-        }, 100);
-
-        // Event Delegation
-        document.addEventListener('mousemove', function(e) {
-            // Optimization: Only run every few frames or if mouse moved significantly?
-            // For now, simple check.
-            
-            // "X-Ray" Detection: Check all elements under the cursor
-            const elements = document.elementsFromPoint(e.clientX, e.clientY);
-            let targetMedia = null;
-
-            // Helper to validate a potential media element
-            function isValideMedia(el) {
-                if (!el) return false;
-                
-                let width, height;
-                if (el.tagName === 'VIDEO') {
-                    width = el.videoWidth || el.offsetWidth;
-                    height = el.videoHeight || el.offsetHeight;
-                } else if (el.tagName === 'IMG') {
-                    width = el.naturalWidth || el.width;
-                    height = el.naturalHeight || el.height;
-                } else if (el.tagName === 'IFRAME') {
-                    width = el.offsetWidth;
-                    height = el.offsetHeight;
-                } else {
-                    return false;
-                }
-
-                const offsetW = el.offsetWidth;
-                const offsetH = el.offsetHeight;
-
-                // Check IFRAME specifically
-                let isVideoFrame = false;
-                if (el.tagName === 'IFRAME') {
-                     try {
-                        const src = (el.src || '').toLowerCase();
-                        const title = (el.title || '').toLowerCase();
-                        
-                        if (src.includes('youtube') || src.includes('vimeo') || src.includes('player') || 
-                            src.includes('video') || src.includes('embed') || src.includes('dailymotion') || 
-                            src.includes('twitch') || src.includes('wistia')) {
-                            isVideoFrame = true;
-                        }
-                        
-                        // Fallback based on size (Broadest catch)
-                        if (!isVideoFrame && (offsetW > 200 && offsetH > 150)) {
-                             const isAd = src.includes('ad') || src.includes('banner') || src.includes('doubleclick') || 
-                                          title.includes('advertisement');
-                             if (!isAd) isVideoFrame = true;
-                        }
-                     } catch(err) {
-                         // Cross-origin access issue likely, default to size check validity if large
-                         if (offsetW > 200 && offsetH > 150) isVideoFrame = true;
-                     }
-                }
-
-                const isBigEnough = (width > 150 && height > 150) || (offsetW > 150 && offsetH > 150);
-                const isValidType = (el.tagName !== 'IFRAME') || isVideoFrame;
-
-                return isBigEnough && isValidType;
-            }
-
-            for (let el of elements) {
-                // EXCLUDE THE WIDGET ITSELF (Critical to prevent self-referencing "shake" bug)
-                if (el.id === 'spread-it-share-btn' || el.closest('.spread-it-overlay-btn')) {
-                    continue;
-                }
-
-                // 1. Check if the element ITSELF is media
-                if (isValideMedia(el)) {
-                    targetMedia = el;
-                    break;
-                }
-
-                // 2. Deep Scan: Check if the element WRAPS a media element that covers it
-                // e.g., a div overlay on top of a video
-                if (el.tagName === 'DIV' || el.tagName === 'A' || el.tagName === 'SECTION' || el.tagName === 'SPAN') {
-                    const childMedia = el.querySelector('video, iframe, img');
-                    if (isValideMedia(childMedia)) {
-                        // Ensure the child is actually visually under the cursor (mostly)
-                        // If the wrapper is huge and the video is tiny in the corner, this might be false positive if we just check containment.
-                        // But usually hover effects are tight wrappers.
-                        targetMedia = childMedia;
-                        break; 
-                    }
-                }
-            }
-
-            if (targetMedia) {
-                if (hideTimeout) clearTimeout(hideTimeout);
-                
-                // Only reposition if we switched targets or button is hidden
-                if (activeElement !== targetMedia || !btn.classList.contains('visible')) {
-                    activeElement = targetMedia;
-                    positionButton(targetMedia);
-                    btn.classList.add('visible');
-                    btn.style.opacity = '1';
-                    btn.style.pointerEvents = 'auto';
-                }
-            } 
-            // Handle hovering the button itself
-            else if (e.target === btn || btn.contains(e.target)) {
-                if (hideTimeout) clearTimeout(hideTimeout);
-                
-                btn.classList.add('visible');
-                btn.style.opacity = '1';
-                btn.style.pointerEvents = 'auto';
-            } 
-            // Handle hovering off
-            else {
-                // If we are not over media and not over button, plan to hide
-                if (!hideTimeout && btn.classList.contains('visible')) {
-                    hideTimeout = setTimeout(() => {
-                        btn.classList.remove('visible');
-                        btn.style.opacity = '0';
-                        btn.style.pointerEvents = 'none';
-                        hideTimeout = null;
-                    }, 300);
-                }
-            }
-        }, { passive: true }); // Passive for better scroll performance
-
-        // Handle Scroll
-        window.addEventListener('scroll', () => {
-             if (activeElement && btn.classList.contains('visible')) {
-                positionButton(activeElement);
-            }
-        }, { passive: true });
-
-        // Handle Click
-        btn.addEventListener('click', function(e) {
+        function handleMediaClick(e, el) {
             e.preventDefault();
             e.stopPropagation();
 
-            if (!activeElement) return;
-
-            let mediaUrl = activeElement.src;
-            if (activeElement.tagName === 'VIDEO' && !mediaUrl) {
-               const source = activeElement.querySelector('source');
-               if (source) mediaUrl = source.src;
+            let mediaUrl = el.src;
+            if (el.tagName === 'VIDEO' && !mediaUrl) {
+                const source = el.querySelector('source');
+                if (source) mediaUrl = source.src;
             }
 
             const pageUrl = window.location.href;
             const pageTitle = document.title;
-            const altText = activeElement.alt || activeElement.getAttribute('aria-label') || activeElement.title || '';
-            const isVideo = activeElement.tagName === 'VIDEO' || activeElement.tagName === 'IFRAME';
+            const altText = el.alt || el.getAttribute('aria-label') || el.title || '';
+            const isVideo = el.tagName === 'VIDEO' || el.tagName === 'IFRAME';
 
-            // Determine if we should query 'video' or 'image'
             const params = new URLSearchParams({
                 [isVideo ? 'video' : 'image']: mediaUrl,
                 source: pageUrl,
@@ -269,7 +137,6 @@
             });
 
             const targetUrl = `${BASE_URL}/smart-share?${params.toString()}`;
-
             const width = 1000;
             const height = 800;
             const left = (window.screen.width / 2) - (width / 2);
@@ -280,14 +147,16 @@
                 'SpreadItShare',
                 `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,resizable=yes`
             );
-        });
+        }
+
+        // Run periodically to catch lazy-loaded content
+        setInterval(makeMediaClickable, 2000);
+        makeMediaClickable();
     }
 
-    // Wait for DOM
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initSpreadIt);
     } else {
         initSpreadIt();
     }
-
 })();
