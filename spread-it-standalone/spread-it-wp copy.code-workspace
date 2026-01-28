@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../COPY-SPREAD-IT copy"
+		}
+	],
+	"settings": {
+		"git.ignoreLimitWarning": true
+	}
+}

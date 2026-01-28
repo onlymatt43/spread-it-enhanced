@@ -12,6 +12,17 @@ const sharp = require('sharp');
 const { MongoClient } = require('mongodb');
 const { fetchTrendingTopics } = require('./services/trending');
 
+// Nouveaux Services d'Intelligence
+const Strategist = require('./services/strategist');
+const VideoAI = require('./services/video-ai');
+
+// Serve static files (including widget.js)
+app.use(express.static('public'));
+
+// Configure layout if using ejs-layouts
+// const expressLayouts = require('express-ejs-layouts');
+// app.use(expressLayouts);
+
 // Charge d'abord .env.local (perso), puis .env (template) si présent
 const defaultEnvPath = path.join(__dirname, '.env');
 const localEnvPath = path.join(__dirname, '.env.local');
@@ -43,9 +54,28 @@ if (!fs.existsSync(sessionBaseDir)) {
 let sessionStore;
 let sessionStoreName = 'memory';
 
+// Initialisation MongoDB & Strategist
+let db;
+let strategist;
+const mongoClient = new MongoClient(process.env.MONGODB_URI || 'mongodb://localhost:27017');
+
+async function connectDB() {
+  try {
+    await mongoClient.connect();
+    db = mongoClient.db('spreadit_db');
+    strategist = new Strategist(db);
+    console.log("✅ MongoDB & Strategist Connected");
+  } catch (e) {
+    console.warn("⚠️ MongoDB Connection Failed. Strategist running in memory-only mode.");
+    strategist = new Strategist(null);
+  }
+}
+connectDB();
+
 try {
   const SQLiteStore = require('connect-sqlite3')(session);
   sessionStore = new SQLiteStore({
+
     dir: sessionBaseDir,
     db: process.env.SESSION_DB_NAME || 'sessions.sqlite'
   });
@@ -159,6 +189,71 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
 // Routes
+
+app.post('/api/create-post-ai', express.json(), async (req, res) => {
+    try {
+        const { content, options, mediaUrl, mediaType } = req.body;
+        
+        console.log(`🧠 AI Strategy working for ${options.platform}...`);
+
+        // 1. Si c'est une vidéo, analyser d'abord le contenu visuel profond
+        let videoContext = {};
+        if (mediaType === 'video' && mediaUrl) {
+           videoContext = await VideoAI.analyzeVideo(mediaUrl);
+           console.log("Video Context:", videoContext.summary);
+        }
+
+        // 2. Le Strategist combine tout (Rules + Trends + History + Content)
+        // Il enrichit le prompt de base avec les données vidéos
+        const enrichedContent = videoContext.summary 
+            ? `Video contains: ${videoContext.summary.join(', ')}. Caption: ${content}`
+            : content;
+
+        const strategyResult = await strategist.optimizeForPlatform(
+            enrichedContent, 
+            mediaType || 'text', 
+            options.platform
+        );
+
+        // 3. Simuler l'enregistrement du "Lancement" pour le tracking futur
+        // (En prod, on enregistre l'ID du post ici)
+        strategist.recordPostLaunch({
+            platform: options.platform,
+            content_generated: strategyResult.optimized_text,
+            strategy_used: strategyResult.reasoning
+        });
+
+        res.json({ 
+            content: strategyResult.optimized_text,
+            meta: {
+               reasoning: strategyResult.reasoning,
+               virality_score: strategyResult.estimated_virality_score,
+               trends: strategyResult.trends_used,
+               best_time: strategyResult.best_time_to_post
+            }
+        });
+
+    } catch (error) {
+        console.error(error);
+        const { content, options } = req.body;
+        // In real app, call OpenAI here
+        // For now, return mock
+        
+        // Simuler un appel OpenAI (court-circuité pour la démo instantanée)
+        /* 
+        const completion = await openai.chat.completions.create({...});
+        */
+        
+        let enhanced = content;
+        if(options.platform === 'twitter') enhanced = `🚀 Check this out! ${content.substring(0,50)}... #MustSee`;
+        else enhanced = `✨ ${content} \n\nFound this amazing content and had to share! What do you think?`;
+
+        res.json({ content: enhanced });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.get('/', (req, res) => {
   res.render('index', {
     title: 'Spread It - Créateur de Contenu IA',

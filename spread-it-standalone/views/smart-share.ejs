@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spread It - Smart Share</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #f0f2f5;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .main-container {
+            display: flex;
+            height: 100%;
+        }
+        
+        /* Left Sidebar - Source Content & Platform Select */
+        .sidebar {
+            width: 350px;
+            background: white;
+            border-right: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow-y: auto;
+            z-index: 10;
+        }
+        
+        .source-preview-img {
+            width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            object-fit: cover;
+            max-height: 250px;
+        }
+
+        .platform-btn {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            background: #f9f9f9;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            color: #333;
+        }
+        .platform-btn:hover {
+            background: #f0f2ff;
+            transform: translateX(5px);
+        }
+        .platform-btn.active {
+            background: #e7f3ff;
+            border-color: #1877f2;
+            color: #1877f2;
+            font-weight: 600;
+        }
+        .platform-btn i {
+            font-size: 24px;
+            margin-right: 15px;
+            width: 30px;
+            text-align: center;
+        }
+
+        /* Right Content - The "Real" Editor */
+        .editor-area {
+            flex: 1;
+            padding: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        /* Platform Specific Mockups */
+        .mockup {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 600px;
+            display: none; /* Hidden by default */
+        }
+        .mockup.active {
+            display: block;
+            animation: fadeIn 0.3s;
+        }
+
+        /* Facebook Style */
+        .fb-mockup {
+            border: 1px solid #ddd;
+        }
+        .fb-header {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            background: #fcfcfc;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            align-items: center;
+        }
+        .fb-avatar {
+            width: 40px;
+            height: 40px;
+            background: #ddd;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        .fb-body {
+            padding: 0;
+        }
+        .fb-textarea {
+            width: 100%;
+            border: none;
+            padding: 20px;
+            font-size: 24px;
+            resize: none;
+            outline: none;
+            min-height: 150px;
+        }
+        .fb-media {
+            padding: 0 15px 15px;
+        }
+        .fb-media img {
+            width: 100%;
+            border-radius: 8px;
+        }
+        .fb-footer {
+            padding: 15px;
+            border-top: 1px solid #eee;
+        }
+        .fb-btn {
+            background: #1877f2;
+            color: white;
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* Instagram Style */
+        .ig-mockup {
+            max-width: 400px;
+            border: 1px solid #dbdbdb;
+        }
+        .ig-header {
+            padding: 14px 16px;
+            border-bottom: 1px solid #dbdbdb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .ig-preview-img {
+            width: 100%;
+            display: block;
+        }
+        .ig-body {
+            padding: 16px;
+        }
+        .ig-textarea {
+            width: 100%;
+            border: none;
+            resize: none;
+            outline: none;
+            font-family: -apple-system, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-size: 14px;
+            line-height: 18px;
+        }
+
+        /* Twitter Style */
+        .tw-mockup {
+            border-radius: 16px;
+        }
+        .tw-body {
+            padding: 16px;
+            display: flex;
+        }
+        .tw-input-area {
+            flex: 1;
+            margin-left: 12px;
+        }
+        .tw-textarea {
+            width: 100%;
+            border: none;
+            font-size: 20px;
+            resize: none;
+            outline: none;
+            margin-bottom: 15px;
+        }
+        .tw-btn {
+            background: #1d9bf0;
+            color: white;
+            border: none;
+            border-radius: 9999px;
+            padding: 8px 16px;
+            font-weight: 700;
+            float: right;
+        }
+
+        /* AI Overlay */
+        .ai-assistant {
+            margin-top: 15px;
+            background: #f0f7ff;
+            border: 1px dashed #1877f2;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .ai-btn {
+            font-size: 0.9rem;
+            color: #1877f2;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        /* Spread It Pulse */
+        .spread-pulse {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(102, 126, 234, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0); }
+        }
+
+        .hidden-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #888;
+            text-align: center;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="main-container">
+
+    <!-- Sidebar: Logo & Platforms -->
+    <div class="sidebar">
+        <div class="text-center mb-4">
+            <h3 style="background: linear-gradient(45deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800;">
+                <i class="fas fa-rocket"></i> Spread It
+            </h3>
+        </div>
+
+        <h6>Source Detected</h6>
+        <% if (data.image) { %>
+            <img src="<%= data.image %>" class="source-preview-img" alt="Captured content">
+        <% } %>
+        <p class="small text-muted mb-4"><i class="fas fa-link"></i> <%= data.title %></p>
+
+        <h6>Select Platform</h6>
+        <div class="platform-btn" onclick="selectPlatform('facebook')">
+            <i class="fab fa-facebook text-primary"></i> Facebook
+        </div>
+        <div class="platform-btn" onclick="selectPlatform('instagram')">
+            <i class="fab fa-instagram" style="color: #e1306c;"></i> Instagram
+        </div>
+        <div class="platform-btn" onclick="selectPlatform('twitter')">
+            <i class="fab fa-twitter text-info"></i> Twitter / X
+        </div>
+        <div class="platform-btn" onclick="selectPlatform('linkedin')">
+            <i class="fab fa-linkedin text-primary"></i> LinkedIn
+        </div>
+    </div>
+
+    <!-- Editor Area -->
+    <div class="editor-area" id="editorArea">
+        
+        <div id="placeholder" class="hidden-placeholder">
+            <i class="fas fa-hand-pointer fa-3x mb-3"></i>
+            <h4>Select a platform to start spreading</h4>
+            <p>Customize your post for each network individually.</p>
+        </div>
+
+        <!-- Facebook Mockup -->
+        <div id="facebook-mockup" class="mockup fb-mockup">
+            <div class="fb-header">
+                <div class="fb-avatar"></div>
+                <div><strong>Your Page</strong><div class="small">Public</div></div>
+            </div>
+            <textarea class="fb-textarea" placeholder="What's on your mind?"><%= data.text %></textarea>
+            <div class="fb-media">
+                <img src="<%= data.image %>" alt="">
+            </div>
+            
+            <div class="ai-assistant">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <small><strong><i class="fas fa-robot"></i> AI Assistant</strong></small>
+                    <span class="ai-btn" onclick="enhanceText('facebook')">Enhance Text</span>
+                </div>
+                <small class="text-muted">Suggestions based on image content...</small>
+            </div>
+
+            <div class="fb-footer">
+                <button class="fb-btn spread-pulse" onclick="spreadIt('facebook')">Spread It to Facebook</button>
+            </div>
+        </div>
+
+        <!-- Instagram Mockup -->
+        <div id="instagram-mockup" class="mockup ig-mockup">
+            <div class="ig-header">
+                <span class="text-muted">Create new post</span>
+                <span class="text-primary fw-bold" onclick="spreadIt('instagram')">Share</span>
+            </div>
+            <img src="<%= data.image %>" class="ig-preview-img" alt="">
+            <div class="ig-body">
+                <textarea class="ig-textarea" rows="4" placeholder="Write a caption..."><%= data.text %></textarea>
+                <div class="ai-assistant mt-3">
+                    <span class="ai-btn" onclick="enhanceText('instagram')">Generate Hashtags</span>
+                </div>
+            </div>
+        </div>
+
+         <!-- Twitter Mockup -->
+         <div id="twitter-mockup" class="mockup tw-mockup">
+            <div class="p-3 border-bottom">
+                <button class="tw-btn spread-pulse" onclick="spreadIt('twitter')">Post</button>
+                <div style="clear:both"></div>
+            </div>
+            <div class="tw-body">
+                <div class="fb-avatar" style="width:48px;height:48px;"></div>
+                <div class="tw-input-area">
+                    <textarea class="tw-textarea" rows="3" placeholder="What is happening?"><%= data.text %></textarea>
+                    <img src="<%= data.image %>" style="width:100%; border-radius:16px; border:1px solid #eee;" alt="">
+                    
+                    <div class="ai-assistant mt-3">
+                        <span class="ai-btn" onclick="enhanceText('twitter')">Shorten & Optimize</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- LinkedIn Mockup (Reusing FB minimal style for now) -->
+        <div id="linkedin-mockup" class="mockup fb-mockup">
+             <div class="fb-header">
+                <div class="fb-avatar"></div>
+                <div><strong>Your Profile</strong><div class="small">Posted by user</div></div>
+            </div>
+            <textarea class="fb-textarea" placeholder="What do you want to talk about?"><%= data.text %></textarea>
+             <div class="fb-media">
+                <img src="<%= data.image %>" alt="">
+            </div>
+             <div class="fb-footer">
+                <button class="fb-btn spread-pulse" style="background:#0077b5" onclick="spreadIt('linkedin')">Post to LinkedIn</button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+function selectPlatform(platform) {
+    // UI Updates
+    document.querySelectorAll('.platform-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`.platform-btn[onclick*="${platform}"]`).classList.add('active');
+
+    document.getElementById('placeholder').style.display = 'none';
+    document.querySelectorAll('.mockup').forEach(m => m.classList.remove('active'));
+    
+    document.getElementById(platform + '-mockup').classList.add('active');
+}
+
+function enhanceText(platform) {
+   // Simulation of AI
+   const btn = event.target;
+   const originalText = btn.innerText;
+   btn.innerText = 'Thinking...';
+   
+   fetch('/api/create-post-ai', { // We'll assume an endpoint exists or use the existing
+       method: 'POST',
+       headers: {'Content-Type': 'application/json'},
+       body: JSON.stringify({
+           content: "Context from image: <%= data.title %>",
+           options: { platform: platform, style: 'engaging' }
+       })
+   }).then(res => res.json()).then(data => {
+       // Locate textarea in current mockup
+       const container = document.getElementById(platform + '-mockup');
+       const textarea = container.querySelector('textarea');
+       textarea.value = data.content || "AI generated amazing content for " + platform; // Fallback if API fails
+       btn.innerText = originalText;
+   }).catch(e => {
+       console.error(e);
+       // Fallback simulation
+       const container = document.getElementById(platform + '-mockup');
+       const textarea = container.querySelector('textarea');
+       if (platform === 'twitter') textarea.value += " #Trending #SpreadIt";
+       else if (platform === 'instagram') textarea.value += "\n.\n.\n#InstaGood #DailyInspo";
+       else textarea.value += " [Enhanced by AI]";
+       btn.innerText = originalText;
+   });
+}
+
+function spreadIt(platform) {
+    const container = document.getElementById(platform + '-mockup');
+    const content = container.querySelector('textarea').value;
+    const btn = container.querySelector('button') || container.querySelector('.text-primary'); // For IG
+    
+    const originalText = btn.innerText;
+    btn.innerText = 'Spreading...';
+    
+    // Simulate API call
+    setTimeout(() => {
+        alert('Successfully spread to ' + platform + '!\n\nContent:\n' + content);
+        btn.innerText = 'Spread Done!';
+        // Optional: Close window
+        // window.close();
+    }, 1500);
+}
+</script>
+
+</body>
+</html>

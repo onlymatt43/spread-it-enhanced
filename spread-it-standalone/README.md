@@ -1,17 +1,35 @@
 # Spread It - Standalone
 
-Une application web moderne pour créer, améliorer et partager du contenu avec l'IA sur les réseaux sociaux.
+Une application web moderne pour créer, améliorer, analyser et partager du contenu avec l'IA sur les réseaux sociaux.
 
 ## Fonctionnalités
 
-- **Création de contenu assistée par IA** : Améliorez votre contenu brut avec GPT-4
-- **Modération automatique** : Détection et filtrage du contenu inapproprié
-- **Analyse de timing optimal** : Publication aux meilleurs moments basée sur l'analyse de marché
-- **Partage multi-plateforme** : Facebook, Twitter, LinkedIn, Instagram
-- **Interface fluide** : Design moderne et intuitif
-- **API pour intégration** : Intégrez facilement dans WordPress ou autres CMS
+- **Création & Amélioration IA** : Génération et amélioration de texte avec GPT-4
+- **Analyse de Vision** : Analyse intelligente d'images avec Google Cloud Vision (labels, textes, logos)
+- **Tendances en temps réel** : Détection des sujets chauds sur les réseaux pour inspirer votre contenu
+- **Galerie de Médias** : Gestion intégrée des images et médias
+- **Système de Leads** : Capture et gestion de prospects (MongoDB)
+- **Partage Multi-plateforme** : Facebook, Twitter, LinkedIn, Instagram, et support expérimental TikTok
+- **Optimisation d'images** : Redimensionnement et formatage automatique avec Sharp
+- **Modération Automatique** : Filtrage de contenu via Google Perspective/Vision
+- **Sessions Robustes** : Gestion de session persistante (SQLite/Fichiers)
+- **API pour intégration** : Points d'entrée pour CMS externes (WordPress)
+
+## Architecture Technique
+
+- **Backend** : Node.js + Express
+- **Base de données** : MongoDB (Leads, Données) + SQLite (Sessions)
+- **IA & Traitement** : OpenAI GPT-4, Google Cloud Vision
+- **Traitement d'image** : Sharp, Canvas
+- **Frontend** : EJS templates + Bootstrap 5 + JS Client
+- **Tâches de fond** : Node-cron pour la planification
 
 ## Déploiement
+
+### Prérequis
+- Node.js >= 18.0.0
+- Compte MongoDB (Atlas ou local)
+- Clés API (OpenAI, Google Cloud, Réseaux Sociaux)
 
 ### Sur Vercel
 
@@ -20,67 +38,63 @@ Une application web moderne pour créer, améliorer et partager du contenu avec 
 3. Installez les dépendances : `npm install`
 4. Déployez sur Vercel : `vercel --prod`
 
-### Sur Render
+### Sur Render/Production
 
-1. Créez un nouveau service Web sur Render
-2. Connectez votre repository Git
-3. Configurez les variables d'environnement
-4. Déployez
+1. Créez un nouveau service Web
+2. Mettez en place les variables d'environnement
+3. Commande de build: `npm install`
+4. Commande de start: `npm start`
 
 ## Configuration
 
 ### Variables d'environnement
 
-Copiez `.env.example` vers `.env` et configurez :
+Copiez `.env.example` vers `.env`. Voici les principales configurations :
 
 ```env
-# OpenAI (requis)
-OPENAI_API_KEY=your_openai_api_key
+# Core & IA
+OPENAI_API_KEY=votre_clé
+GOOGLE_CLOUD_VISION_KEY=votre_clé_google
+Note: Google Credentials peuvent nécessiter un chemin de fichier ou un JSON stringifié
 
-# Réseaux sociaux (optionnel, selon les plateformes utilisées)
+# Base de Données
+MONGODB_URI=mongodb+srv://... (Pour les leads et données persistantes)
+SESSION_DB_NAME=sessions.sqlite
+
+# Sécurité & Session
+SESSION_SECRET=votre_secret_fort
+API_KEY=clé_pour_api_externe
+SESSION_COOKIE_SECURE=true (en production)
+
+# Réseaux Sociaux (Selon besoin)
 FACEBOOK_ACCESS_TOKEN=...
 TWITTER_API_KEY=...
-# etc.
-
-# Sécurité
-SESSION_SECRET=your_secret
-API_KEY=your_api_key
+INSTAGRAM_ACCESS_TOKEN=...
 ```
 
 ### APIs requises
 
-- **OpenAI API** : Pour l'amélioration du contenu
-- **APIs des réseaux sociaux** : Pour le partage automatique
-- **Google Perspective API** : Pour la modération de contenu (optionnel)
+- **OpenAI API** : Génération de texte
+- **Google Cloud Vision API** : Analyse d'images
+- **MongoDB Atlas** : Stockage de données
+- **APIs Réseaux Sociaux** : Graph API, Twitter V2, etc.
 
 ## Utilisation
 
 ### Interface Web
 
-1. Accédez à l'URL de votre déploiement
-2. Cliquez sur "Créer" pour saisir votre contenu
-3. L'IA améliore automatiquement votre texte
-4. Choisissez les plateformes de partage
-5. Publiez immédiatement ou programmez
+1. **Dashboard** : Vue d'ensemble des tendances et accès rapide
+2. **Créer** : Outil de rédaction assistée et upload d'images avec analyse IA
+3. **Galerie** : Visualisation des médias disponibles
+4. **Partager** : Publication multi-canaux avec prévisualisation
+5. **Leads** : Suivi des interactions et prospects
 
-### API pour WordPress
+### API pour WordPress / Intégration
 
-```php
-// Exemple d'intégration WordPress
-$response = wp_remote_post('https://your-app-url.com/api/create-post', [
-    'headers' => [
-        'Content-Type' => 'application/json',
-        'x-api-key' => 'your_api_key'
-    ],
-    'body' => json_encode([
-        'content' => 'Votre contenu ici',
-        'options' => [
-            'style' => 'professionnel',
-            'length' => 'moyen'
-        ]
-    ])
-]);
-```
+L'endpoint principal `/api/create-post` permet d'envoyer du contenu depuis un site externe.
+Nouveaux endpoints :
+- `GET /api/leads` : Récupération des leads
+- `GET /api/gallery/:type` : Accès aux ressources média
 
 ## Développement
 
@@ -88,7 +102,7 @@ $response = wp_remote_post('https://your-app-url.com/api/create-post', [
 # Installation
 npm install
 
-# Développement
+# Développement (avec nodemon)
 npm run dev
 
 # Production
@@ -97,14 +111,6 @@ npm start
 # Tests
 npm test
 ```
-
-## Architecture
-
-- **Frontend** : EJS templates avec Bootstrap 5
-- **Backend** : Node.js + Express
-- **IA** : OpenAI GPT-4
-- **Stockage** : Session-based (extensible vers base de données)
-- **APIs** : RESTful pour intégrations tierces
 
 ## Sécurité
 
