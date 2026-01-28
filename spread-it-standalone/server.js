@@ -1274,22 +1274,26 @@ app.get('/learning-dashboard', (req, res) => {
         </div>
 
         <div class="row mt-4">
-            <div class="col-12">
+            <div class="col-md-6">
                 <div class="card">
-                    <div class="card-header">Recent Posts & Learning</div>
+                    <div class="card-header">Performance Criteria</div>
                     <div class="card-body">
-                        <div id="recentPosts" class="table-responsive">
-                            <table class="table table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>Platform</th>
-                                        <th>Content</th>
-                                        <th>Engagement</th>
-                                        <th>Posted</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="recentTableBody"></tbody>
-                            </table>
+                        <div id="performanceCriteria" class="text-center">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">Learned Patterns</div>
+                    <div class="card-body">
+                        <div id="learnedPatterns" class="text-center">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1323,13 +1327,17 @@ app.get('/learning-dashboard', (req, res) => {
                 
                 // Best Posts
                 const bestPostsDiv = document.getElementById('bestPosts');
+                bestPostsDiv.innerHTML = '<h6>Posts Performants (>10% engagement)</h6>';
                 if (data.bestPerforming) {
                     data.bestPerforming.forEach(post => {
                         const item = document.createElement('div');
-                        item.className = 'list-group-item';
+                        item.className = 'list-group-item d-flex justify-content-between align-items-center';
                         item.innerHTML = \`
-                            <strong>\${post.platform}</strong> - \${post.engagement}% engagement<br>
-                            <small>\${post.content}</small>
+                            <div>
+                                <strong>\${post.platform}</strong> - \${post.engagement}% engagement<br>
+                                <small class="text-muted">\${post.content}</small>
+                            </div>
+                            <span class="badge bg-success">\${post.engagement}%</span>
                         \`;
                         bestPostsDiv.appendChild(item);
                     });
@@ -1337,17 +1345,72 @@ app.get('/learning-dashboard', (req, res) => {
                 
                 // Recent Posts Table
                 const tbody = document.getElementById('recentTableBody');
+                tbody.innerHTML = '';
                 if (data.recentPosts) {
                     data.recentPosts.forEach(post => {
                         const row = document.createElement('tr');
+                        const engagementBadge = post.engagement === 'pending' ? 
+                            '<span class="badge bg-warning">Pending</span>' : 
+                            \`<span class="badge bg-\${parseFloat(post.engagement) > 10 ? 'success' : 'secondary'}">\${post.engagement}</span>\`;
                         row.innerHTML = \`
-                            <td>\${post.platform}</td>
+                            <td><strong>\${post.platform}</strong></td>
                             <td>\${post.content}</td>
-                            <td>\${post.engagement}</td>
+                            <td>\${engagementBadge}</td>
                             <td>\${new Date(post.posted).toLocaleDateString()}</td>
                         \`;
                         tbody.appendChild(row);
                     });
+                }
+                
+                // Performance Criteria
+                const criteriaDiv = document.getElementById('performanceCriteria');
+                if (data.performanceCriteria) {
+                    criteriaDiv.innerHTML = \`
+                        <h5>Auto-Generated Targets</h5>
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <div class="p-2 bg-light rounded">
+                                    <div class="h4 text-warning">\${data.performanceCriteria.minEngagement}%</div>
+                                    <small>Minimum Target</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-2 bg-light rounded">
+                                    <div class="h4 text-primary">\${Math.round(data.performanceCriteria.targetEngagement)}%</div>
+                                    <small>Good Target</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-2 bg-light rounded">
+                                    <div class="h4 text-success">\${Math.round(data.performanceCriteria.excellentThreshold)}%</div>
+                                    <small>Excellent</small>
+                                </div>
+                            </div>
+                        </div>
+                        <small class="text-muted">Based on \${data.performanceCriteria.basedOnPosts} posts</small>
+                    \`;
+                }
+                
+                // Learned Patterns
+                const patternsDiv = document.getElementById('learnedPatterns');
+                if (data.learnedPatterns) {
+                    patternsDiv.innerHTML = \`
+                        <h5>Winning Formulas</h5>
+                        <div class="list-group list-group-flush">
+                            <div class="list-group-item">
+                                <strong>Best Structure:</strong> \${data.learnedPatterns.bestStructure || 'Learning...'}
+                            </div>
+                            <div class="list-group-item">
+                                <strong>Top Style:</strong> \${data.learnedPatterns.topStyle || 'Learning...'}
+                            </div>
+                            <div class="list-group-item">
+                                <strong>Success Rate:</strong> \${data.learnedPatterns.successRate || '0'}% of posts hit targets
+                            </div>
+                            <div class="list-group-item">
+                                <strong>Optimal Length:</strong> \${data.learnedPatterns.optimalLength || '150'} characters
+                            </div>
+                        </div>
+                    \`;
                 }
                 
             } catch (error) {

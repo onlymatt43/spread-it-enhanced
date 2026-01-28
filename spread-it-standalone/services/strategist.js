@@ -42,39 +42,61 @@ class Strategist {
         // 4. Analyser les patterns de succès passés
         const successPatterns = await this.analyzeSuccessPatterns(targetPlatform);
 
-        // 5. Générer l'optimisation via GPT-4 avec apprentissage
+        // 5. Étudier les posts performants pour s'en inspirer
+        const topPerformers = await this.analyzeTopPerformers(targetPlatform);
+
+        // 6. Générer l'optimisation via GPT-4 avec apprentissage profond
         let prompt = "";
 
         if (action === 'generate_hashtags') {
+            // Étudier les hashtags performants pour cette plateforme
+            const topPerformers = await this.analyzeTopPerformers(targetPlatform);
+            
             prompt = `
-                TU ES UN EXPERT EN SEO SOCIAL ET HASHTAGS INSTAGRAM.
+                TU ES UN EXPERT EN HASHTAGS QUI NE GÉNÈRE QUE DES TAGS PROUVÉS GAGNANTS.
                 
                 TON OBJECTIF:
-                Générer une liste de 30 hashtags ultra-optimisés pour Instagram, basés sur l'image ou le sujet fourni.
+                Générer UNIQUEMENT des hashtags qui ont déjà fait leurs preuves dans tes posts performants.
+                
+                HASHTAGS LES PLUS PERFORMANTS DE TON HISTORIQUE:
+                ${topPerformers.topHashtags?.slice(0, 20).map(h => h.tag).join(' ') || '#Viral #Trending #Growth #Motivation'}
+                
+                TENDANCES ACTUELLES À INTÉGRER:
+                ${trends.join(' ')}
+                
+                CONTENU À TAGGER: "${content}"
                 
                 RÈGLES STRICTES:
-                - NE GÉNÈRE PAS DE PHRASES. PAS DE TEXTE. UNIQUEMENT DES HASHTAGS SÉPARÉS PAR DES ESPACES.
-                - IGNORE tout texte qui ressemble à un nom de fichier, un titre technique ou du bruit (ex: "blowONLYMATT", "IMG_1234"). Concentre-toi sur le contexte sémantique implicite.
-                - Mélange des hashtags très populaires (${trends.join(' ')}) avec des hashtags de niche (Long-tail).
-                - Le but est la VIRALITÉ maximale.
-
-                CONTENU ANALYSÉ: "${content}" (Si ça ressemble à un nom de fichier, ignore-le et devine le sujet: Lifestyle, Business, AI, Tech...)
-
-                FORMAT JSON ATTENDU:
-                {
-                    "optimized_text": "#Hashtag1 #Hashtag2 #Hashtag3 ...",
-                    "reasoning": "Focus sur niche X et Y",
-                    "estimated_virality_score": 90
-                }
+                - N'INVENTE PAS de nouveaux hashtags
+                - UTILISE UNIQUEMENT ceux qui ont déjà performé dans ton historique
+                - MÉLANGE avec les tendances actuelles si pertinentes
+                - 25-30 hashtags maximum
+                - PAS DE TEXTE, QUE DES HASHTAGS SÉPARÉS PAR ESPACES
+                
+                FORMAT: #tag1 #tag2 #tag3 ... (rien d'autre)
             `;
         } else {
-            // MODE CRÉATION DE POST CLASSIQUE AVEC APPRENTISSAGE
+            // MODE CRÉATION DE POST CLASSIQUE AVEC APPRENTISSAGE PROFOND
             prompt = `
-                TU ES UN STRATÈGE DE CONTENU VIRAL QUI APPREND DE SES ERREURS.
+                TU ES UN IMITATEUR DE GÉNIE QUI COPIE LES FORMULES GAGNANTES.
                 
                 TON OBJECTIF:
-                Créer un post percutant qui s'améliore constamment grâce aux données de performance passées.
+                Créer un post viral en COPIANT EXACTEMENT les patterns des posts qui ont explosé.
                 
+                DONNÉES DES POSTS PERFORMANTS ANALYSÉS:
+                - Structure gagnante la plus commune: ${Object.keys(topPerformers.commonPatterns?.topStructures || {}).sort((a,b) => (topPerformers.commonPatterns.topStructures[b] || 0) - (topPerformers.commonPatterns.topStructures[a] || 0))[0] || 'balanced'}
+                - Style dominant: ${Object.keys(topPerformers.commonPatterns?.topStyles || {}).sort((a,b) => (topPerformers.commonPatterns.topStyles[b] || 0) - (topPerformers.commonPatterns.topStyles[a] || 0))[0] || 'direct_address'}
+                - Longueur moyenne des posts réussis: ${Math.round(topPerformers.commonPatterns?.avgLength || 150)} caractères
+                - Ratio d'emojis dans les succès: ${(topPerformers.commonPatterns?.emojiRatio || 0.6) * 100}%
+                - Ratio de questions: ${(topPerformers.commonPatterns?.questionRatio || 0.4) * 100}%
+                - Ratio de CTA: ${(topPerformers.commonPatterns?.ctaRatio || 0.3) * 100}%
+
+                EXEMPLES DE POSTS QUI ONT MARCHÉ (À COPIER):
+                ${topPerformers.templates?.slice(0, 3).map(t => `"${t.content}" (${t.engagement}% engagement)`).join('\n') || 'Aucun exemple disponible'}
+
+                HASHTAGS PROUVÉS PERFORMANTS:
+                ${topPerformers.topHashtags?.slice(0, 15).map(h => h.tag).join(' ') || '#Viral #Trending'}
+
                 TON STYLE (OBLIGATOIRE):
                 - Ton: Amical mais Direct, Edgy, Sexy.
                 - Langue: Mélange naturel d'Anglais et de Français Québécois (Franglais cool).
@@ -93,24 +115,24 @@ class Strategist {
                 CONTENU DE BASE:
                 "${content}"
 
-                TA MISSION:
-                1. ANALYSE L'ESSENCE: IGNORE TOTALEMENT le texte technique. Si vide, invente une histoire sur "Growth/Lifestyle".
-                2. APPRENDS DU PASSÉ: Intègre les éléments qui ont fonctionné avant (${successPatterns.winningElements.join(', ')}).
-                3. ÉCRIS LE POST:
-                   - Hook qui tue (inspiré des succès passés).
-                   - Corps qui parle directement au lecteur.
-                   - Call to Action subtil.
-                4. OPTIMISE POUR L'ENGAGEMENT: Utilise les patterns gagnants pour maximiser le score.
+                TA MISSION CRITIQUE:
+                1. COPIE LA STRUCTURE DES POSTS GAGNANTS: Utilise la même formule (hook + body + CTA)
+                2. IMITE LE STYLE RÉUSSI: Copie le ton et la façon d'écrire des posts performants
+                3. AJOUTE LES BONS HASHTAGS: Utilise ceux qui ont déjà prouvé leur efficacité
+                4. RESPECTE LES PROPORTIONS: Même ratio d'emojis, questions, CTA que les gagnants
+                5. OPTIMISE LA LONGUEUR: Vise la longueur moyenne des posts réussis
 
                 FORMAT JSON ATTENDU:
                 {
-                    "optimized_text": "Le texte final du post ici...",
-                    "reasoning": "Pourquoi ce post va performer basé sur l'historique",
-                    "estimated_virality_score": ${Math.min(100, (successPatterns.avgEngagement || 0) + 20)},
+                    "optimized_text": "Le texte final qui copie les gagnants...",
+                    "reasoning": "J'ai copié la structure X des posts à Y% d'engagement",
+                    "estimated_virality_score": ${Math.min(100, (topPerformers.avgEngagement || 0) + 25)},
                     "best_time_to_post": "${insights.bestTime}",
-                    "predicted_engagement": "${successPatterns.avgEngagement || 5}%"
+                    "predicted_engagement": "${topPerformers.avgEngagement || 8}%",
+                    "copied_patterns": ["structure_${Object.keys(topPerformers.commonPatterns?.topStructures || {}).sort((a,b) => (topPerformers.commonPatterns.topStructures[b] || 0) - (topPerformers.commonPatterns.topStructures[a] || 0))[0] || 'balanced'}", "style_${Object.keys(topPerformers.commonPatterns?.topStyles || {}).sort((a,b) => (topPerformers.commonPatterns.topStyles[b] || 0) - (topPerformers.commonPatterns.topStyles[a] || 0))[0] || 'direct'}"]
                 }
             `;
+        }
         }
 
         try {
@@ -121,12 +143,24 @@ class Strategist {
             });
 
             const result = JSON.parse(completion.choices[0].message.content);
+            
+            // Évaluer la qualité du post généré
+            const qualityEvaluation = this.evaluatePostQuality(result.optimized_text, targetPlatform);
+            
+            // Générer les critères de performance pour cette plateforme
+            const performanceCriteria = await this.generatePerformanceCriteria(targetPlatform);
+            
             return {
                 ...result,
                 trends_used: trends,
                 trends_source: trendsSource,
                 competition_note: competition.summary,
-                competition_source: competition.source
+                competition_source: competition.source,
+                quality_score: qualityEvaluation.score,
+                quality_grade: qualityEvaluation.grade,
+                quality_reasons: qualityEvaluation.reasons,
+                performance_criteria: performanceCriteria,
+                top_performers_analyzed: topPerformers.templates?.length || 0
             };
 
         } catch (error) {
@@ -456,28 +490,123 @@ class Strategist {
     }
 
     /**
-     * Génère plusieurs variantes et choisit la meilleure basée sur l'historique
+     * Analyse approfondie des posts à haut engagement pour créer des templates
      */
-    async generateMultipleVariants(content, mediaType, targetPlatform, count = 3) {
-        const variants = [];
-        
-        for (let i = 0; i < count; i++) {
-            const variant = await this.optimizeForPlatform(content, mediaType, targetPlatform, 'create_post');
-            variants.push(variant);
-        }
-        
-        // Trier par score de viralité estimé + historique
-        const insights = await this.getHistoryInsights(targetPlatform);
-        
-        variants.sort((a, b) => {
-            // Prioriser les styles qui ont marché avant
-            const aStyleBonus = a.optimized_text.toLowerCase().includes(insights.bestStyle.toLowerCase()) ? 10 : 0;
-            const bStyleBonus = b.optimized_text.toLowerCase().includes(insights.bestStyle.toLowerCase()) ? 10 : 0;
+    async analyzeTopPerformers(platform) {
+        if (!this.db) return { templates: [], hashtags: [] };
+
+        try {
+            const collection = this.db.collection('post_history');
             
-            return (b.estimated_virality_score + bStyleBonus) - (a.estimated_virality_score + aStyleBonus);
+            // Récupérer les posts avec > 10% d'engagement
+            const topPosts = await collection.find({ 
+                platform: platform,
+                engagement_score: { $gt: 10 }
+            }).sort({ engagement_score: -1 }).limit(20).toArray();
+            
+            if (topPosts.length === 0) return { templates: [], hashtags: [] };
+            
+            const templates = [];
+            const hashtagPerformance = {};
+            
+            for (const post of topPosts) {
+                // Analyser la structure du post
+                const content = post.content_generated || '';
+                
+                // Détecter les patterns structurels
+                const structure = this.analyzePostStructure(content);
+                
+                // Extraire et compter les hashtags
+                const hashtags = content.match(/#\w+/g) || [];
+                hashtags.forEach(tag => {
+                    hashtagPerformance[tag] = (hashtagPerformance[tag] || 0) + post.engagement_score;
+                });
+                
+                templates.push({
+                    structure: structure,
+                    engagement: post.engagement_score,
+                    content: content,
+                    hashtags: hashtags,
+                    style: this.detectStyle(content),
+                    length: content.length,
+                    hasEmoji: /[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u.test(content),
+                    hasQuestion: content.includes('?'),
+                    hasCallToAction: /\b(dm|message|comment|share|like|follow)\b/i.test(content)
+                });
+            }
+            
+            // Trier les hashtags par performance
+            const topHashtags = Object.entries(hashtagPerformance)
+                .sort(([,a], [,b]) => b - a)
+                .slice(0, 30)
+                .map(([tag, score]) => ({ tag, score }));
+            
+            return {
+                templates: templates,
+                topHashtags: topHashtags,
+                avgEngagement: topPosts.reduce((sum, p) => sum + p.engagement_score, 0) / topPosts.length,
+                commonPatterns: this.extractCommonPatterns(templates)
+            };
+        } catch (e) {
+            console.error("Top performer analysis error:", e);
+            return { templates: [], hashtags: [] };
+        }
+    }
+
+    /**
+     * Analyse la structure d'un post
+     */
+    analyzePostStructure(content) {
+        const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 0);
+        
+        if (sentences.length === 1) return 'single_sentence';
+        if (sentences.length === 2) return 'hook_body';
+        if (sentences.length === 3) return 'hook_body_cta';
+        
+        // Analyser la longueur des phrases
+        const avgSentenceLength = sentences.reduce((sum, s) => sum + s.length, 0) / sentences.length;
+        
+        if (avgSentenceLength < 20) return 'short_punchy';
+        if (avgSentenceLength > 50) return 'long_story';
+        
+        return 'balanced';
+    }
+
+    /**
+     * Détecte le style d'écriture
+     */
+    detectStyle(content) {
+        const lower = content.toLowerCase();
+        
+        if (lower.includes('tu ') || lower.includes('vous ')) return 'direct_address';
+        if (lower.includes('je ') || lower.includes('j\'ai')) return 'personal_story';
+        if (lower.includes('?')) return 'question_based';
+        if (/🔥|💥|🚀|✨/.test(content)) return 'high_energy';
+        if (content.length < 100) return 'concise';
+        
+        return 'narrative';
+    }
+
+    /**
+     * Extrait les patterns communs des posts performants
+     */
+    extractCommonPatterns(templates) {
+        const patterns = {
+            avgLength: templates.reduce((sum, t) => sum + t.length, 0) / templates.length,
+            emojiRatio: templates.filter(t => t.hasEmoji).length / templates.length,
+            questionRatio: templates.filter(t => t.hasQuestion).length / templates.length,
+            ctaRatio: templates.filter(t => t.hasCallToAction).length / templates.length,
+            topStructures: {},
+            topStyles: {}
+        };
+        
+        // Compter les structures et styles populaires
+        templates.forEach(t => {
+            patterns.topStructures[t.structure] = (patterns.topStructures[t.structure] || 0) + 1;
+            patterns.topStyles[t.style] = (patterns.topStyles[t.style] || 0) + 1;
         });
         
-        return variants[0]; // Retourner le meilleur
+        return patterns;
     }
 
     /**
@@ -515,6 +644,12 @@ class Strategist {
                 .limit(10)
                 .toArray();
 
+            // Générer les critères de performance pour Instagram (plateforme principale)
+            const performanceCriteria = await this.generatePerformanceCriteria('instagram');
+            
+            // Analyser les patterns appris
+            const learnedPatterns = await this.analyzeLearnedPatterns();
+
             return {
                 totalPosts,
                 postsWithData: postsWithEngagement.length,
@@ -532,11 +667,150 @@ class Strategist {
                     content: p.content_generated?.substring(0, 50) + "...",
                     posted: p.timestamp
                 })),
-                learningEfficiency: avgEngagement > 5 ? "Improving" : "Needs more data"
+                learningEfficiency: avgEngagement > 5 ? "Improving" : "Needs more data",
+                performanceCriteria,
+                learnedPatterns
             };
         } catch (e) {
             console.error("Dashboard error:", e);
             return { error: e.message };
+        }
+    }
+
+    /**
+     * Évalue automatiquement la qualité d'un post selon des critères objectifs
+     */
+    evaluatePostQuality(content, platform) {
+        let score = 50; // Score de base
+        const reasons = [];
+        
+        // Critère 1: Longueur optimale
+        const length = content.length;
+        if (platform === 'twitter' && length <= 280) {
+            score += 10;
+            reasons.push("Longueur parfaite pour Twitter");
+        } else if (platform === 'instagram' && length >= 50 && length <= 150) {
+            score += 15;
+            reasons.push("Longueur optimale pour Instagram");
+        } else if (length > 200) {
+            score -= 5;
+            reasons.push("Trop long, risque de perte d'attention");
+        }
+        
+        // Critère 2: Présence d'emoji (mais pas trop)
+        const emojiCount = (content.match(/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu) || []).length;
+        if (emojiCount >= 1 && emojiCount <= 2) {
+            score += 10;
+            reasons.push("Bon usage des emojis");
+        } else if (emojiCount > 3) {
+            score -= 5;
+            reasons.push("Trop d'emojis, peut sembler immature");
+        }
+        
+        // Critère 3: Question rhétorique
+        if (content.includes('?')) {
+            score += 8;
+            reasons.push("Question engageante détectée");
+        }
+        
+        // Critère 4: Appel à l'action
+        if (/\b(dm|message|comment|share|like|follow|tag)\b/i.test(content)) {
+            score += 12;
+            reasons.push("CTA présent pour encourager l'engagement");
+        }
+        
+        // Critère 5: Adresse directe au lecteur
+        if (/\b(tu|vous|toi)\b/i.test(content)) {
+            score += 10;
+            reasons.push("Adresse directe au lecteur");
+        }
+        
+        // Critère 6: Hashtags (pour Instagram)
+        if (platform === 'instagram') {
+            const hashtagCount = (content.match(/#\w+/g) || []).length;
+            if (hashtagCount >= 5 && hashtagCount <= 15) {
+                score += 10;
+                reasons.push("Bon nombre de hashtags");
+            } else if (hashtagCount > 20) {
+                score -= 5;
+                reasons.push("Trop de hashtags, peut sembler spam");
+            }
+        }
+        
+        // Critère 7: Énergie et ponctuation
+        if (/[.!?]{2,}/.test(content)) {
+            score += 5;
+            reasons.push("Ponctuation énergique");
+        }
+        
+        // Critère 8: Éviter les mots faibles
+        const weakWords = ['très', 'beaucoup', 'vraiment', 'super', 'génial'];
+        const weakCount = weakWords.filter(word => content.toLowerCase().includes(word)).length;
+        if (weakCount > 2) {
+            score -= 5;
+            reasons.push("Trop de mots faibles, manque d'impact");
+        }
+        
+        return {
+            score: Math.max(0, Math.min(100, score)),
+            reasons: reasons,
+            grade: score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 55 ? 'C' : 'D'
+        };
+    }
+
+    /**
+     * Génère des critères de performance automatiques basés sur l'historique
+     */
+    async generatePerformanceCriteria(platform) {
+        if (!this.db) return { minEngagement: 5, targetScore: 70 };
+        
+        try {
+            const collection = this.db.collection('post_history');
+            
+            const posts = await collection.find({ platform }).toArray();
+            if (posts.length === 0) return { minEngagement: 5, targetScore: 70 };
+            
+            const engagements = posts.map(p => p.engagement_score || 0).filter(e => e > 0);
+            const avgEngagement = engagements.reduce((a, b) => a + b, 0) / engagements.length;
+            
+            // Le critère minimum est la médiane des engagements
+            const sorted = engagements.sort((a, b) => a - b);
+            const median = sorted[Math.floor(sorted.length / 2)];
+            
+            return {
+                minEngagement: Math.max(3, median),
+                targetEngagement: Math.max(8, avgEngagement * 1.2),
+                excellentThreshold: Math.max(15, avgEngagement * 2),
+                platform: platform,
+                basedOnPosts: posts.length
+            };
+        } catch (e) {
+            console.error("Performance criteria error:", e);
+            return { minEngagement: 5, targetScore: 70 };
+        }
+    }
+
+    /**
+     * Analyse les patterns que l'IA a appris de l'historique
+     */
+    async analyzeLearnedPatterns() {
+        if (!this.db) return { bestStructure: 'unknown', topStyle: 'unknown' };
+        
+        try {
+            const topPerformers = await this.analyzeTopPerformers('instagram'); // On analyse Instagram par défaut
+            
+            return {
+                bestStructure: Object.keys(topPerformers.commonPatterns?.topStructures || {}).sort((a,b) => (topPerformers.commonPatterns.topStructures[b] || 0) - (topPerformers.commonPatterns.topStructures[a] || 0))[0] || 'balanced',
+                topStyle: Object.keys(topPerformers.commonPatterns?.topStyles || {}).sort((a,b) => (topPerformers.commonPatterns.topStyles[b] || 0) - (topPerformers.commonPatterns.topStyles[a] || 0))[0] || 'direct_address',
+                successRate: Math.round((topPerformers.templates?.length || 0) / Math.max(1, await this.db.collection('post_history').countDocuments()) * 100),
+                optimalLength: Math.round(topPerformers.commonPatterns?.avgLength || 150),
+                emojiRatio: Math.round((topPerformers.commonPatterns?.emojiRatio || 0.6) * 100),
+                questionRatio: Math.round((topPerformers.commonPatterns?.questionRatio || 0.4) * 100),
+                ctaRatio: Math.round((topPerformers.commonPatterns?.ctaRatio || 0.3) * 100)
+            };
+        } catch (e) {
+            console.error("Learned patterns analysis error:", e);
+            return { bestStructure: 'learning', topStyle: 'learning' };
         }
     }
 }
