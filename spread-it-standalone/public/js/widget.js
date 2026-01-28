@@ -81,8 +81,12 @@
 
             // Pin to Top-Right Corner (Stable)
             const btnSize = 60;
-            const top = rect.top + scrollTop + 10; // 10px from top
-            const left = rect.right + scrollLeft - btnSize - 10; // 10px from right
+            // Ensure we don't go off-screen
+            let top = rect.top + scrollTop + 10;
+            let left = rect.right + scrollLeft - btnSize - 10;
+            
+            // Adjust if hidden by header or offscreen (basic)
+            if (rect.top < 60) top = rect.bottom + scrollTop - 70; // Flip to bottom if top is cut off
 
             btn.style.top = `${top}px`;
             btn.style.left = `${left}px`;
@@ -94,22 +98,20 @@
             if (hideTimeout) return; // Already scheduling hide
             hideTimeout = setTimeout(() => {
                 btn.classList.remove('visible');
-                btn.style.pointerEvents = 'none'; // Ensure click-through when hidden
+                btn.style.pointerEvents = 'none'; 
                 hideTimeout = null;
-            }, 300); // Short delay to allow moving mouse to button
+            }, 300); 
         }
 
         // VALIDATION
         function isValideMedia(el) {
             if (!el) return false;
-            // Ignore widget itself
             if(el.id === 'spread-it-share-btn' || el.closest('.spread-it-overlay-btn')) return false;
 
             const w = el.offsetWidth || el.videoWidth || 0;
             const h = el.offsetHeight || el.videoHeight || 0;
             
-            // Size Check
-            if (w < 150 || h < 150) return false;
+            if (w < 100 || h < 100) return false; // Lowered threshold
 
             const tag = el.tagName;
             if (tag === 'IMG' || tag === 'VIDEO') return true;
@@ -117,8 +119,6 @@
             if (tag === 'IFRAME') {
                 try {
                      const src = (el.src || '').toLowerCase();
-                     // Strict check: Only attach to known video players.
-                     // We intentionally exclude generic iframes (like Vercel galleries) because we can't access their internal videos.
                      if (src.includes('youtube') || src.includes('vimeo') || src.includes('player') || 
                          src.includes('embed') || src.includes('twitch') || src.includes('dailymotion')) {
                          return true;
@@ -131,35 +131,42 @@
             return false;
         }
 
-        // INTERACTION - Using MOUSEMOVE global but efficient
-        // We use mousemove because 'mouseenter' on iframes doesn't bubble or fire reliably if covered.
-        // But we only calculate position ONCE when target changes.
         document.addEventListener('mousemove', (e) => {
-            // Check if we are over the button itself
             if (e.target.closest('.spread-it-overlay-btn')) {
                 if (hideTimeout) clearTimeout(hideTimeout);
                 return;
             }
 
-            // X-Ray check
             const els = document.elementsFromPoint(e.clientX, e.clientY);
             let found = null;
             
             for (let el of els) {
+                // Direct check
                 if (isValideMedia(el)) {
                     found = el;
                     break;
                 }
+                // Wrapper check (Deep Scan Lite) - Helps if image is wrapped in a tight div/link
+                if (el.tagName === 'A' || el.tagName === 'div') {
+                    const img = el.querySelector('img, video');
+                    // Only use if the img is actually large enough
+                    if (img && isValideMedia(img)) {
+                         // Verify the image is actually under the cursor roughly
+                         const r = img.getBoundingClientRect();
+                         if (e.clientX >= r.left && e.clientX <= r.right && 
+                             e.clientY >= r.top && e.clientY <= r.bottom) {
+                             found = img;
+                             break;
+                         }
+                    }
+                }
             }
 
             if (found) {
-                // If we found media, show button there. 
-                // Only reposition if we switched targets or button was hidden
                 if (found !== activeElement || !btn.classList.contains('visible')) {
                     showButtonAt(found);
                 }
             } else {
-                // No media under cursor
                 hideButton();
             }
         }, { passive: true });
