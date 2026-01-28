@@ -144,22 +144,34 @@
                     const offsetW = el.offsetWidth;
                     const offsetH = el.offsetHeight;
                     
-                    // Special Check for Iframes to ensure they are likely videos (YouTube/Vimeo)
+                    // IFRAME Detection Logic (Broadened)
                     let isVideoFrame = false;
                     if (el.tagName === 'IFRAME') {
                         try {
-                           const src = el.src || '';
-                           if (src.includes('youtube') || src.includes('vimeo') || src.includes('player')) {
+                           const src = (el.src || '').toLowerCase();
+                           const title = (el.title || '').toLowerCase();
+                           const className = (typeof el.className === 'string' ? el.className : '').toLowerCase();
+                           
+                           // 1. Check Source URL for common video keywords
+                           if (src.includes('youtube') || src.includes('vimeo') || src.includes('player') || 
+                               src.includes('video') || src.includes('embed') || src.includes('dailymotion') || 
+                               src.includes('twitch') || src.includes('wistia')) {
                                isVideoFrame = true;
                            }
-                        } catch(e) {}
-                        
-                        // If checking src failed or didn't match, maybe check class names?
-                        // For now strict check to avoid buttons on ads/widgets.
-                        if (!isVideoFrame && (width > 300 && height > 150)) {
-                             // Loose heuristic: Large iframes might be videos?
-                             // Be careful here.
-                             // isVideoFrame = true; // Uncomment if desperate
+                           
+                           // 2. Fallback: If it is LARGE, assume it is content (video) unless it looks like an ad
+                           if (!isVideoFrame && (offsetW > 250 && offsetH > 150)) {
+                               const isAd = src.includes('ad') || src.includes('banner') || src.includes('doubleclick') || 
+                                            src.includes('marketing') || title.includes('advertisement');
+                               
+                               if (!isAd) {
+                                   isVideoFrame = true;
+                               }
+                           }
+                        } catch(e) {
+                            // If access denied (cross-origin), but size is large, we might still want to try?
+                            // Often we can't read 'src' if cross-origin? No, src attribute is usually accessible on the element itself,
+                            // unless it was dynamically injected without attribute.
                         }
                     }
 
