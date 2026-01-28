@@ -176,6 +176,11 @@
             }
 
             for (let el of elements) {
+                // EXCLUDE THE WIDGET ITSELF (Critical to prevent self-referencing "shake" bug)
+                if (el.id === 'spread-it-share-btn' || el.closest('.spread-it-overlay-btn')) {
+                    continue;
+                }
+
                 // 1. Check if the element ITSELF is media
                 if (isValideMedia(el)) {
                     targetMedia = el;
