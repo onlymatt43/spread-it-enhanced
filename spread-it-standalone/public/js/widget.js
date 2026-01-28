@@ -1,6 +1,6 @@
 (function() {
     function initSpreadIt() {
-        console.log("🚀 Spread It Widget - Click Mode Active...");
+        console.log("🚀 Spread It Widget - Stable Corner Mode...");
         
         // Configuration
         const BASE_URL = (window.spreadItConfig && window.spreadItConfig.baseUrl) || 
@@ -14,109 +14,172 @@
         // Styles
         const style = document.createElement('style');
         style.textContent = `
-            .spread-it-clickable {
-                cursor: pointer !important;
-                transition: transform 0.2s ease, box-shadow 0.2s ease;
-            }
-            .spread-it-clickable:hover {
-                transform: scale(1.02);
-                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            }
-            .spread-it-iframe-overlay {
+            .spread-it-overlay-btn {
                 position: absolute;
-                background: rgba(0,0,0,0);
+                z-index: 2147483647 !important;
+                width: 60px; /* Smaller, cleaner */
+                height: 60px;
+                border-radius: 50%;
                 cursor: pointer;
-                z-index: 1000;
+                opacity: 0;
+                transform: scale(0.8);
+                transition: opacity 0.2s ease, transform 0.2s ease;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+                background: #000;
+                border: 2px solid white;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                pointer-events: none; /* Initially pass-through */
             }
-            .spread-it-iframe-overlay:hover {
-                background: rgba(102, 126, 234, 0.1); /* Subtle hint */
-                border: 3px solid #667eea;
+            .spread-it-overlay-btn.visible {
+                opacity: 1 !important;
+                transform: scale(1) !important;
+                pointer-events: auto !important;
+            }
+            .spread-it-overlay-btn:hover {
+                transform: scale(1.1) !important;
+                box-shadow: 0 0 20px rgba(102, 126, 234, 0.6);
+            }
+            .spread-it-video-btn {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                border-radius: 50%;
+                pointer-events: none;
             }
         `;
         document.head.appendChild(style);
 
-        // Debug Indicator
-        const debug = document.createElement('div');
-        debug.className = 'spread-it-debug';
-        debug.style.cssText = "position: fixed; bottom: 10px; right: 10px; background: #333; color: #fff; padding: 10px; border-radius: 5px; z-index: 999999; font-family: sans-serif; font-size: 12px; pointer-events: none; opacity: 0.8;";
-        debug.innerText = 'Spread It: Click Mode';
-        document.body.appendChild(debug);
-        setTimeout(() => debug.remove(), 5000); 
+        // Create the button
+        const btn = document.createElement('div');
+        btn.id = 'spread-it-share-btn';
+        btn.className = 'spread-it-overlay-btn';
+        
+        const videoSrc = `${BASE_URL}/assets/logo-video-spread-it.mp4`;
+        btn.innerHTML = `<video src="${videoSrc}" autoplay loop muted playsinline class="spread-it-video-btn"></video>`;
+        document.body.appendChild(btn);
 
-        // Helper: Init Click Logic on Media
-        function makeMediaClickable() {
-            // IMAGES & VIDEOS
-            const visualMedia = document.querySelectorAll('img, video');
-            visualMedia.forEach(el => {
-                // Ignore small icons/logos
-                if (el.offsetWidth < 150 || el.offsetHeight < 150) return;
-                
-                if (!el.classList.contains('spread-it-clickable')) {
-                    el.classList.add('spread-it-clickable');
-                    el.addEventListener('click', (e) => handleMediaClick(e, el));
-                }
-            });
+        let activeElement = null;
+        let hideTimeout = null;
 
-            // IFRAMES (Youtube/Vimeo Players Only)
-            // We use a safe heuristic to only overlay obvious players, NOT general apps (like Vercel galleries) if possible.
-            // But if the Vercel gallery is the target, we CAN overlay it if it matches criteria.
-            const iframes = document.querySelectorAll('iframe');
-            iframes.forEach(el => {
-                // Skip if already handled
-                if (el.parentElement.querySelector('.spread-it-iframe-overlay')) return;
-                
-                const w = el.offsetWidth;
-                const h = el.offsetHeight;
-                if (w < 200 || h < 150) return;
+        // Position helper
+        function showButtonAt(el) {
+            if (!el) return;
+            activeElement = el;
+            
+            // Clear any pending hide
+            if (hideTimeout) {
+                clearTimeout(hideTimeout);
+                hideTimeout = null;
+            }
 
-                // Check Src
-                const src = (el.src || '').toLowerCase();
-                const isPlayer = src.includes('youtube') || src.includes('vimeo') || src.includes('player') || 
-                                 src.includes('embed') || src.includes('twitch') || src.includes('dailymotion');
+            const rect = el.getBoundingClientRect();
+            // Scroll offsets
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
 
-                // If it looks like a player, overlay it
-                if (isPlayer) {
-                    const overlay = document.createElement('div');
-                    overlay.className = 'spread-it-iframe-overlay';
-                    
-                    // Position overlay over iframe
-                    // We need relative positioning context usually, simplest is to use rects but those change on scroll.
-                    // Best approach: wrap the iframe? No, breaks layout.
-                    // Insert sibling and position absolutely relative to parent (assuming parent is relative).
-                    // Or set dimensions matches.
-                    
-                    // Simple approach: Set exact size and margin matching
-                    const rect = el.getBoundingClientRect();
-                    // This is hard to sync on scroll.
-                    // Better: use a wrapper if possible? 
-                    // Let's assume the iframe is in a container.
-                    
-                    // Actually, easiest way is to bind the click on the Iframe's PARENT if it's tight.
-                    // But parents are often loose usually.
-                    
-                    // Let's try wrapping (safe if display block)
-                    const wrapper = document.createElement('div');
-                    wrapper.style.position = 'relative';
-                    wrapper.style.display = 'inline-block';
-                    // Move iframe into wrapper
-                    el.parentNode.insertBefore(wrapper, el);
-                    wrapper.appendChild(el);
-                    
-                    // Add overlay to wrapper
-                    wrapper.appendChild(overlay);
-                    overlay.style.top = '0';
-                    overlay.style.left = '0';
-                    overlay.style.width = '100%';
-                    overlay.style.height = '100%';
-                    
-                    overlay.addEventListener('click', (e) => handleMediaClick(e, el));
-                }
-            });
+            // Pin to Top-Right Corner (Stable)
+            const btnSize = 60;
+            const top = rect.top + scrollTop + 10; // 10px from top
+            const left = rect.right + scrollLeft - btnSize - 10; // 10px from right
+
+            btn.style.top = `${top}px`;
+            btn.style.left = `${left}px`;
+            btn.classList.add('visible');
         }
 
-        function handleMediaClick(e, el) {
+        function hideButton() {
+            if (hideTimeout) return; // Already scheduling hide
+            hideTimeout = setTimeout(() => {
+                btn.classList.remove('visible');
+                // Don't set activeElement to null immediately via variable, just visually hide
+                // activeElement = null; 
+                hideTimeout = null;
+            }, 300); // Short delay to allow moving mouse to button
+        }
+
+        // VALIDATION
+        function isValideMedia(el) {
+            if (!el) return false;
+            // Ignore widget itself
+            if(el.id === 'spread-it-share-btn' || el.closest('.spread-it-overlay-btn')) return false;
+
+            const w = el.offsetWidth || el.videoWidth || 0;
+            const h = el.offsetHeight || el.videoHeight || 0;
+            
+            // Size Check
+            if (w < 150 || h < 150) return false;
+
+            const tag = el.tagName;
+            if (tag === 'IMG' || tag === 'VIDEO') return true;
+            
+            if (tag === 'IFRAME') {
+                try {
+                    // Similar checks as before
+                     const src = (el.src || '').toLowerCase();
+                     if (src.includes('youtube') || src.includes('vimeo') || src.includes('player') || 
+                         src.includes('embed') || src.includes('twitch') || src.includes('dailymotion')) {
+                         return true;
+                     }
+                     // Fallback size check for things like Vercel gallery IF it looks media-like?
+                     // Let's rely on explicit player detection mainly to avoid ads
+                     if (w > 250 && h > 150) return true; 
+                } catch(e) {
+                     return (w > 250 && h > 150); // Fallback
+                }
+            }
+            return false;
+        }
+
+        // INTERACTION - Using MOUSEMOVE global but efficient
+        // We use mousemove because 'mouseenter' on iframes doesn't bubble or fire reliably if covered.
+        // But we only calculate position ONCE when target changes.
+        document.addEventListener('mousemove', (e) => {
+            // Check if we are over the button itself
+            if (e.target.closest('.spread-it-overlay-btn')) {
+                if (hideTimeout) clearTimeout(hideTimeout);
+                return;
+            }
+
+            // X-Ray check
+            const els = document.elementsFromPoint(e.clientX, e.clientY);
+            let found = null;
+            
+            for (let el of els) {
+                if (isValideMedia(el)) {
+                    found = el;
+                    break;
+                }
+            }
+
+            if (found) {
+                // If we found media, show button there. 
+                // Only reposition if we switched targets or button was hidden
+                if (found !== activeElement || !btn.classList.contains('visible')) {
+                    showButtonAt(found);
+                }
+            } else {
+                // No media under cursor
+                hideButton();
+            }
+        }, { passive: true });
+
+        // Scroll listener to update position if Visible
+        // This keeps it pinned during scroll
+        window.addEventListener('scroll', () => {
+             if (btn.classList.contains('visible') && activeElement) {
+                 showButtonAt(activeElement);
+             }
+        }, { passive: true });
+
+        // CLICK ACTION
+        btn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
+
+            if (!activeElement) return;
+            const el = activeElement;
 
             let mediaUrl = el.src;
             if (el.tagName === 'VIDEO' && !mediaUrl) {
@@ -129,6 +192,7 @@
             const altText = el.alt || el.getAttribute('aria-label') || el.title || '';
             const isVideo = el.tagName === 'VIDEO' || el.tagName === 'IFRAME';
 
+            // Determine if we should query 'video' or 'image'
             const params = new URLSearchParams({
                 [isVideo ? 'video' : 'image']: mediaUrl,
                 source: pageUrl,
@@ -147,11 +211,7 @@
                 'SpreadItShare',
                 `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,resizable=yes`
             );
-        }
-
-        // Run periodically to catch lazy-loaded content
-        setInterval(makeMediaClickable, 2000);
-        makeMediaClickable();
+        });
     }
 
     if (document.readyState === 'loading') {
