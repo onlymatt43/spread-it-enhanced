@@ -426,12 +426,23 @@ function enhanceText(platform) {
    const originalText = btn.innerText;
    btn.innerText = 'Thinking...';
    
+   // Determine intent based on platform (IG = Hashtags only, others = Captions)
+   // Or verify button text if we want to be more specific
+   let action = 'create_post';
+   if (platform === 'instagram') {
+       action = 'generate_hashtags';
+   }
+
    fetch('/api/create-post-ai', {
        method: 'POST',
        headers: {'Content-Type': 'application/json'},
        body: JSON.stringify({
            content: "Context from image: <%= data.title %>",
-           options: { platform: platform, style: 'engaging' },
+           options: { 
+               platform: platform, 
+               style: 'engaging',
+               action: action 
+           },
            mediaUrl: "<%= data.video || data.image %>",
            mediaType: "<%= data.video ? 'video' : 'image' %>"
        })
@@ -439,7 +450,15 @@ function enhanceText(platform) {
        // Locate textarea in current mockup
        const container = document.getElementById(platform + '-mockup');
        const textarea = container.querySelector('textarea');
-       textarea.value = data.content || "AI generated amazing content for " + platform; // Fallback if API fails
+       
+       if (action === 'generate_hashtags') {
+           // Append hashtags to existing text instead of replacing
+           const currentValue = textarea.value;
+           textarea.value = currentValue + "\n\n" + (data.content || "#SpreadIt #Viral");
+       } else {
+           textarea.value = data.content || "AI generated amazing content for " + platform; 
+       }
+       
        btn.innerText = originalText;
    }).catch(e => {
        console.error(e);

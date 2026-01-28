@@ -15,7 +15,7 @@ class Strategist {
      * Point d'entrée principal : Optimise le contenu pour une plateforme donnée
      * en prenant en compte les trends actuels et l'historique de l'utilisateur.
      */
-    async optimizeForPlatform(content, mediaType, targetPlatform) {
+    async optimizeForPlatform(content, mediaType, targetPlatform, action = 'create_post') {
         
         // 1. Récupérer les "Trends" du moment (VRAIES DONNÉES GOOGLE)
         let trends = [];
@@ -34,51 +34,77 @@ class Strategist {
         }
 
         // 2. Analyser les concurrents et le "Topic"
-        // On demande à l'AI de déduire le sujet principal pour trouver des mots clés pertinents
         const competition = await this.analyzeCompetition(content);
 
         // 3. Apprendre de l'historique (Meilleure performance passée)
         const insights = await this.getHistoryInsights(targetPlatform);
 
         // 4. Générer l'optimisation via GPT-4
-        const prompt = `
-            TU ES UN STRATÈGE DE CONTENU VIRAL QUI PARLE "VRAI".
-            
-            TON OBJECTIF:
-            Créer un post percutant en se basant sur le contenu fourni, mais SANS le paraphraser bêtement. Tu dois lui donner une âme.
+        let prompt = "";
 
-            TON STYLE (OBLIGATOIRE):
-            - Ton: Amical mais Direct, Edgy, Sexy.
-            - Langue: Mélange naturel d'Anglais et de Français Québécois (Franglais cool).
-            - PAS d'enthousiasme corporatif ("Wow! Regardez ça!"). C'est cringe.
-            - PAS d'emojis excessifs. 1 ou 2 max (genre 🔥 ou 👀).
-            - Sois concis. Punchy.
+        if (action === 'generate_hashtags') {
+            prompt = `
+                TU ES UN EXPERT EN SEO SOCIAL ET HASHTAGS INSTAGRAM.
+                
+                TON OBJECTIF:
+                Générer une liste de 30 hashtags ultra-optimisés pour Instagram, basés sur l'image ou le sujet fourni.
+                
+                RÈGLES STRICTES:
+                - NE GÉNÈRE PAS DE PHRASES. PAS DE TEXTE. UNIQUEMENT DES HASHTAGS SÉPARÉS PAR DES ESPACES.
+                - IGNORE tout texte qui ressemble à un nom de fichier, un titre technique ou du bruit (ex: "blowONLYMATT", "IMG_1234"). Concentre-toi sur le contexte sémantique implicite.
+                - Mélange des hashtags très populaires (${trends.join(' ')}) avec des hashtags de niche (Long-tail).
+                - Le but est la VIRALITÉ maximale.
 
-            CONTEXTE ACTUEL:
-            - Plateforme cible: ${targetPlatform} (Adapte la structure pour ça)
-            - Sujets Tendance à intégrer si pertinent: ${trends.join(', ')} (Source: ${trendsSource})
-            - Inspiration de la concurrence: ${competition.strategy_hint}
-            - Historique de succès: Style "${insights.bestStyle}" vers ${insights.bestTime}.
+                CONTENU ANALYSÉ: "${content}" (Si ça ressemble à un nom de fichier, ignore-le et devine le sujet: Lifestyle, Business, AI, Tech...)
 
-            CONTENU DE BASE (A NE PAS JUSTE DÉCRIRE):
-            "${content}"
+                FORMAT JSON ATTENDU:
+                {
+                    "optimized_text": "#Hashtag1 #Hashtag2 #Hashtag3 ...",
+                    "reasoning": "Focus sur niche X et Y",
+                    "estimated_virality_score": 90
+                }
+            `;
+        } else {
+            // MODE CRÉATION DE POST CLASSIQUE
+            prompt = `
+                TU ES UN STRATÈGE DE CONTENU VIRAL QUI PARLE "VRAI".
+                
+                TON OBJECTIF:
+                Créer un post percutant en se basant sur le contenu fourni, mais SANS le paraphraser bêtement. Tu dois lui donner une âme.
 
-            TA MISSION:
-            1. ANALYSE L'ESSENCE: Ignore le texte technique (ex: logos, noms de fichiers). Quel est le message émotionnel ou l'histoire derrière ?
-            2. ÉCRIS LE POST:
-               - Hook qui tue (en une phrase courte).
-               - Corps du texte qui parle directement au lecteur ("Tu...").
-               - Call to Action subtil mais arrogant.
-            3. Si le contenu de base est vide ou technique (ex: juste un nom de fichier), invente une histoire cool autour du concept de "Simplifier sa vie" ou "Passer au niveau supérieur".
+                TON STYLE (OBLIGATOIRE):
+                - Ton: Amical mais Direct, Edgy, Sexy.
+                - Langue: Mélange naturel d'Anglais et de Français Québécois (Franglais cool).
+                - PAS d'enthousiasme corporatif ("Wow! Regardez ça!"). C'est cringe.
+                - PAS d'emojis excessifs. 1 ou 2 max (genre 🔥 ou 👀).
+                - Sois concis. Punchy.
 
-            FORMAT JSON ATTENDU:
-            {
-                "optimized_text": "Le texte final du post ici...",
-                "reasoning": "J'ai choisi ce ton parce que...",
-                "estimated_virality_score": 85,
-                "best_time_to_post": "18:00" 
-            }
-        `;
+                CONTEXTE ACTUEL:
+                - Plateforme cible: ${targetPlatform} (Adapte la structure pour ça)
+                - Sujets Tendance à intégrer si pertinent: ${trends.join(', ')} (Source: ${trendsSource})
+                - Inspiration de la concurrence: ${competition.strategy_hint}
+                - Historique de succès: Style "${insights.bestStyle}" vers ${insights.bestTime}.
+
+                CONTENU DE BASE (A NE PAS JUSTE DÉCRIRE):
+                "${content}"
+
+                TA MISSION:
+                1. ANALYSE L'ESSENCE: IGNORE TOTALEMENT le texte qui ressemble à un nom de fichier, titre technique ou watermark (ex: "blowONLYMATT", "screenshot123"). Si le texte n'a pas de sens, INVENTE une histoire inspirante ou provocante sur le thème "Growth / Lifestyle".
+                2. ÉCRIS LE POST:
+                - Hook qui tue (en une phrase courte).
+                - Corps du texte qui parle directement au lecteur ("Tu...").
+                - Call to Action subtil mais arrogant.
+                3. Si le contenu de base est vide ou technique, invente une histoire cool.
+
+                FORMAT JSON ATTENDU:
+                {
+                    "optimized_text": "Le texte final du post ici...",
+                    "reasoning": "J'ai choisi ce ton parce que...",
+                    "estimated_virality_score": 85,
+                    "best_time_to_post": "18:00" 
+                }
+            `;
+        }
 
         try {
             const completion = await this.openai.chat.completions.create({

@@ -401,10 +401,14 @@ app.post('/api/create-post-ai', express.json(), async (req, res) => {
             ? `Video contains: ${videoContext.summary.join(', ')}. Caption: ${content}`
             : content;
 
+        // Détecter l'intention (générer post complet ou juste hashtags)
+        const action = options.action || 'create_post';
+
         const strategyResult = await strategist.optimizeForPlatform(
             enrichedContent, 
             mediaType || 'text', 
-            options.platform
+            options.platform,
+            action 
         );
 
         // 3. Simuler l'enregistrement du "Lancement" pour le tracking futur
