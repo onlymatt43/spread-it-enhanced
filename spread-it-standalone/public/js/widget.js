@@ -15,9 +15,9 @@
         const style = document.createElement('style');
         style.textContent = `
             .spread-it-overlay-btn {
-                position: absolute;
+                position: fixed; /* Fixed is safer for iframes/scroll containers */
                 z-index: 2147483647 !important;
-                width: 60px; /* Smaller, cleaner */
+                width: 60px; 
                 height: 60px;
                 border-radius: 50%;
                 cursor: pointer;
@@ -30,7 +30,7 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                pointer-events: none; /* Initially pass-through */
+                pointer-events: none; 
             }
             .spread-it-overlay-btn.visible {
                 opacity: 1 !important;
@@ -50,6 +50,14 @@
             }
         `;
         document.head.appendChild(style);
+
+        // Debug Indicator 
+        const debug = document.createElement('div');
+        debug.className = 'spread-it-debug';
+        debug.style.cssText = 'position:fixed; bottom:10px; right:10px; background:rgba(0,0,0,0.8); color:white; padding:8px 12px; border-radius:4px; font-size:12px; z-index:999999; pointer-events:none;';
+        debug.innerText = 'Spread It: Active';
+        document.body.appendChild(debug);
+        setTimeout(() => debug.remove(), 4000);
 
         // Create the button
         const btn = document.createElement('div');
@@ -79,19 +87,25 @@
             const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
             const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
 
-            // Pin to Top-Right Corner (Stable)
+            // Pin to Top-Right Corner (Fixed Positioning)
+            // No need for scrollTop since it's position:fixed relative to viewport
             const btnSize = 60;
-            // Ensure we don't go off-screen
-            let top = rect.top + scrollTop + 10;
-            let left = rect.right + scrollLeft - btnSize - 10;
+            let top = rect.top + 10;
+            let left = rect.right - btnSize - 10;
             
-            // Adjust if hidden by header or offscreen (basic)
-            if (rect.top < 60) top = rect.bottom + scrollTop - 70; // Flip to bottom if top is cut off
+            // Safety check: don't show if element is off-screen
+            if (top < 0 || left < 0 || rect.bottom < 0 || rect.right < 0) {
+                 hideButton();
+                 return;
+            }
+            
+            // Adjust if hidden by header
+            if (top < 60) top = rect.bottom - 70; 
 
             btn.style.top = `${top}px`;
             btn.style.left = `${left}px`;
             btn.classList.add('visible');
-            btn.style.pointerEvents = 'auto'; // Active on show
+            btn.style.pointerEvents = 'auto'; 
         }
 
         function hideButton() {
@@ -149,8 +163,8 @@
                 
                 // 2. Deep Scan (Maximum Robustness)
                 // Check if this element WRAPS a media element that is physically under the cursor
-                // We check commonly used wrappers: Divs, Links, Sections, Spans, Figures, Pictures
-                if (['DIV', 'A', 'SECTION', 'SPAN', 'FIGURE', 'PICTURE', 'LI'].includes(el.tagName)) {
+                // BROADENED LIST to catch almost anything acting as a wrapper
+                if (['DIV', 'A', 'SECTION', 'SPAN', 'FIGURE', 'PICTURE', 'LI', 'ARTICLE', 'MAIN', 'ASIDE', 'HEADER', 'FOOTER'].includes(el.tagName)) {
                     // Find all potential media inside
                     const potentials = el.querySelectorAll('img, video, iframe');
                     for (let p of potentials) {
