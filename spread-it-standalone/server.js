@@ -224,7 +224,8 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
         // 2. Share to each selected platform
         const results = [];
         const errors = [];
---- REAL IMPLEMENTATION OF SOCIAL POSTING ---
+
+        // --- REAL IMPLEMENTATION OF SOCIAL POSTING ---
         const shareToPlatform = async (platform) => {
              console.log(`📤 Attempting to share to ${platform}...`);
              
