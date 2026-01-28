@@ -353,8 +353,7 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
                 return { success: true, platform, id: 'mock_linkedin_' + Date.now(), warning: "LinkedIn implementation pending" };
              }
              
-             return { success: false, platform, error: "Platform not supported yet"m.
-             return { success: true, platform, id: 'mock_id_' + Date.now() };
+             return { success: false, platform, error: "Platform not supported yet" };
         };
 
         for (const platform of platforms) {
