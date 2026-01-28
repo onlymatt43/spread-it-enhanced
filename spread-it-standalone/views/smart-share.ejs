@@ -410,6 +410,64 @@
 </div>
 
 <script>
+// --- Split Composer: Locked + AI-managed ---
+function getActivePlatform() {
+    const active = document.querySelector('.platform-btn.active');
+    if (!active) return 'facebook';
+    if (active.innerText.toLowerCase().includes('instagram')) return 'instagram';
+    if (active.innerText.toLowerCase().includes('twitter')) return 'twitter';
+    if (active.innerText.toLowerCase().includes('linkedin')) return 'linkedin';
+    return 'facebook';
+}
+
+function applyComposerToActive() {
+    const platform = getActivePlatform();
+    const container = document.getElementById(platform + '-mockup');
+    const textarea = container.querySelector('textarea');
+    const locked = document.getElementById('locked-textarea')?.value || '';
+    const ai = document.getElementById('ai-textarea')?.value || '';
+    const sep = locked && ai ? "\n\n" : '';
+    textarea.value = locked + sep + ai;
+}
+
+async function aiEditFromChat() {
+    const platform = getActivePlatform();
+    const input = document.getElementById('ai-chat-input');
+    const log = document.getElementById('ai-chat-log');
+    const instruction = (input.value || '').trim();
+    if (!instruction) return;
+
+    const locked = document.getElementById('locked-textarea')?.value || '';
+    const aiText = document.getElementById('ai-textarea')?.value || '';
+
+    // Append user message
+    const userBubble = document.createElement('div');
+    userBubble.className = 'chat-msg user';
+    userBubble.textContent = instruction;
+    log.appendChild(userBubble);
+    input.value = '';
+
+    try {
+        const res = await fetch('/api/ai-edit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ platform, instruction, lockedText: locked, aiText })
+        });
+        const data = await res.json();
+        const newText = data?.edited || aiText;
+        document.getElementById('ai-textarea').value = newText;
+
+        const aiBubble = document.createElement('div');
+        aiBubble.className = 'chat-msg ai';
+        aiBubble.textContent = newText;
+        log.appendChild(aiBubble);
+
+        applyComposerToActive();
+        log.scrollTop = log.scrollHeight;
+    } catch (e) {
+        console.error(e);
+    }
+}
 function selectPlatform(platform) {
     // UI Updates
     document.querySelectorAll('.platform-btn').forEach(b => b.classList.remove('active'));
@@ -528,6 +586,33 @@ function spreadIt(platform) {
         alert("❌ Network/Server Error: " + err.message);
     });
 }
+
+// Minimal UI injection: composer + chat (kept simple for now)
+document.addEventListener('DOMContentLoaded', () => {
+    const host = document.querySelector('.container') || document.body;
+    const composer = document.createElement('div');
+    composer.innerHTML = `
+    <div style="display:flex; gap:16px; margin:16px 0; align-items:flex-start; flex-wrap:wrap">
+        <div style="flex:1; min-width:280px">
+            <label style="font-weight:600">Locked (reste tel quel)</label>
+            <textarea id="locked-textarea" placeholder="Ex: @nom, #hashtags obligatoires, mentions, clauses…" style="width:100%; min-height:80px"></textarea>
+            <label style="font-weight:600; margin-top:8px; display:block">AI section (modifiable)</label>
+            <textarea id="ai-textarea" placeholder="Texte géré par l'IA" style="width:100%; min-height:120px"></textarea>
+            <div style="margin-top:8px">
+                <button class="btn btn-sm btn-primary" onclick="applyComposerToActive()">Appliquer au post actif</button>
+            </div>
+        </div>
+        <div style="flex:1; min-width:280px">
+            <label style="font-weight:600">Chat IA (éditer la partie AI)</label>
+            <div id="ai-chat-log" style="border:1px solid #ddd; border-radius:8px; padding:8px; height:180px; overflow:auto; background:#fff"></div>
+            <div style="display:flex; gap:8px; margin-top:8px">
+                <input id="ai-chat-input" type="text" placeholder="Ex: Rends ça plus punchy, ajoute 2 emojis, garde mes hashtags" style="flex:1; padding:8px">
+                <button class="btn btn-sm" onclick="aiEditFromChat()">Envoyer</button>
+            </div>
+        </div>
+    </div>`;
+    host.prepend(composer);
+});
 </script>
 
 </body>

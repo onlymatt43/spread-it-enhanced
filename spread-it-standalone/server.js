@@ -620,6 +620,33 @@ app.post('/api/create-post-ai', express.json(), async (req, res) => {
     }
 });
 
+// Edit AI section with instruction, preserving locked text (server-side guard)
+app.post('/api/ai-edit', express.json(), async (req, res) => {
+  try {
+    const { platform = 'facebook', instruction = '', lockedText = '', aiText = '' } = req.body || {};
+    const base = aiText || '';
+
+    const sys = `You are an expert social media editor for ${platform}. Apply the user's instruction to improve the caption. STRICT RULES: 1) Do NOT include or modify LOCKED_TEXT; it will be appended separately. 2) Return only the edited AI section as plain text, no markdown, no quotes. 3) Keep it concise, platform-appropriate.`;
+
+    const user = `LOCKED_TEXT (do not modify, do not include):\n${lockedText}\n\nCURRENT_AI_SECTION:\n${base}\n\nINSTRUCTION:\n${instruction}\n\nReturn only the revised AI section.`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [
+        { role: 'system', content: sys },
+        { role: 'user', content: user }
+      ],
+      temperature: 0.7
+    });
+
+    const edited = completion.choices?.[0]?.message?.content?.trim() || base;
+    res.json({ edited });
+  } catch (error) {
+    console.error('ai-edit error:', error.message);
+    res.json({ edited: (req.body?.aiText || '') });
+  }
+});
+
 // --- NOUVELLE ROUTE : MISE À JOUR DES PERFORMANCES (LEARNING LOOP) ---
 app.post('/api/update-post-performance', express.json(), async (req, res) => {
     try {
