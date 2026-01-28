@@ -23,6 +23,8 @@ class VideoAI {
             return { summary: [], pacing: 'unknown', safety: 'unknown', is_simulation: true };
         }
 
+        const request = {
+            inputUri: gcsUri,
             features: ['LABEL_DETECTION', 'SHOT_CHANGE_DETECTION', 'EXPLICIT_CONTENT_DETECTION'],
         };
 
