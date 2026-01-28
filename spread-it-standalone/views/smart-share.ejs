@@ -260,15 +260,15 @@
         </div>
 
         <% 
-            let isEmbed = false;
+            let sourceIsEmbed = false;
             if(data.video && (data.video.includes('youtube') || data.video.includes('vimeo') || data.video.includes('player'))) {
-               isEmbed = true;
+               sourceIsEmbed = true;
             }
         %>
 
         <h6>Source Detected</h6>
         <% if (data.video) { %>
-            <% if (isEmbed) { %>
+            <% if (sourceIsEmbed) { %>
                 <iframe src="<%= data.video %>" class="source-preview-img" style="height: 250px; border:none;" allowfullscreen></iframe>
             <% } else { %>
                 <video src="<%= data.video %>" class="source-preview-img" controls style="max-height: 250px; background:black;"></video>
