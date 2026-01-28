@@ -47,6 +47,88 @@ const cookieSecure = process.env.SESSION_COOKIE_SECURE
   ? process.env.SESSION_COOKIE_SECURE === 'true'
   : runningOnRender;
 const cookieSameSite = process.env.SESSION_COOKIE_SAMESITE || 'lax';
+// Note: env validation is invoked after helpers are defined below.
+
+
+// --- Env Validation Helpers ---
+const PLACEHOLDER_PATTERNS = [/^REPLACE/i, /^dummy$/i, /^YOUR_NEW_API_KEY_HERE$/i];
+function isSet(val) {
+  if (!val || typeof val !== 'string') return false;
+  const v = val.trim();
+  if (!v) return false;
+  return !PLACEHOLDER_PATTERNS.some((re) => re.test(v));
+}
+
+function validateEnv() {
+  const issues = [];
+
+  // OpenAI
+  if (!isSet(process.env.OPENAI_API_KEY)) {
+    issues.push('Missing OPENAI_API_KEY (Strategist content generation will be disabled).');
+  }
+
+  // Google Vision (either API key OR service account fields)
+  const hasVisionAPIKey = isSet(process.env.GOOGLE_CLOUD_VISION_KEY);
+  const hasSA = isSet(process.env.GOOGLE_CLOUD_PRIVATE_KEY) && isSet(process.env.GOOGLE_CLOUD_CLIENT_EMAIL) && isSet(process.env.GOOGLE_CLOUD_PRIVATE_KEY_ID) && isSet(process.env.GOOGLE_CLOUD_PROJECT_ID);
+  if (!hasVisionAPIKey && !hasSA) {
+    issues.push('Missing Google Vision config (provide GOOGLE_CLOUD_VISION_KEY or Service Account fields: GOOGLE_CLOUD_PRIVATE_KEY, GOOGLE_CLOUD_CLIENT_EMAIL, GOOGLE_CLOUD_PRIVATE_KEY_ID, GOOGLE_CLOUD_PROJECT_ID).');
+  }
+
+  // MongoDB (optional)
+  const useMongo = (process.env.USE_MONGO || 'false') === 'true';
+  if (useMongo && !isSet(process.env.MONGODB_URI)) {
+    issues.push('USE_MONGO=true but MONGODB_URI is missing.');
+  }
+
+  // Facebook
+  if (!isSet(process.env.FACEBOOK_PAGE_ID)) {
+    issues.push('Missing FACEBOOK_PAGE_ID (required for Facebook posting).');
+  }
+  if (!isSet(process.env.FACEBOOK_ACCESS_TOKEN)) {
+    issues.push('Missing FACEBOOK_ACCESS_TOKEN (required for Facebook posting).');
+  }
+
+  // Instagram
+  if (!isSet(process.env.INSTAGRAM_ACCESS_TOKEN)) {
+    issues.push('Missing INSTAGRAM_ACCESS_TOKEN (required for Instagram analysis/posting).');
+  }
+  if (!isSet(process.env.INSTAGRAM_BUSINESS_ID)) {
+    issues.push('Missing INSTAGRAM_BUSINESS_ID (required for Instagram business discovery).');
+  }
+
+  // Twitter/X
+  const twMissing = ['TWITTER_API_KEY','TWITTER_API_SECRET','TWITTER_ACCESS_TOKEN','TWITTER_ACCESS_TOKEN_SECRET']
+    .filter(k => !isSet(process.env[k]));
+  if (twMissing.length) {
+    issues.push(`Missing Twitter/X keys: ${twMissing.join(', ')}`);
+  }
+
+  // LinkedIn (optional)
+  if (!isSet(process.env.LINKEDIN_ACCESS_TOKEN)) {
+    issues.push('Missing LINKEDIN_ACCESS_TOKEN (required for LinkedIn posting).');
+  }
+
+  // Perspective API (optional but recommended if toxicity checks enabled)
+  if (!isSet(process.env.PERSPECTIVE_API_KEY)) {
+    issues.push('Missing PERSPECTIVE_API_KEY (content toxicity checks will be disabled).');
+  }
+
+  // Session
+  if (!isSet(process.env.SESSION_SECRET)) {
+    issues.push('Missing SESSION_SECRET (recommended to set a strong secret).');
+  }
+
+  return issues;
+}
+
+// Run env validation at startup (after helpers are defined)
+const startupIssues = validateEnv();
+if (startupIssues.length) {
+  console.warn('⚠️ Env validation warnings:');
+  startupIssues.forEach(msg => console.warn(' - ' + msg));
+} else {
+  console.log('✅ Env validation passed.');
+}
 
 // --- Helper: format caption & hashtags per platform ---
 function formatForPlatform(platform, caption, hashtags) {
@@ -93,23 +175,29 @@ if (!fs.existsSync(sessionBaseDir)) {
 let sessionStore;
 let sessionStoreName = 'memory';
 
-// Initialisation MongoDB & Strategist
+// Initialisation MongoDB & Strategist (optionnel via USE_MONGO)
 let db;
 let strategist;
-const mongoClient = new MongoClient(process.env.MONGODB_URI || 'mongodb://localhost:27017');
+const USE_MONGO = (process.env.USE_MONGO || 'false') === 'true';
 
-async function connectDB() {
-  try {
-    await mongoClient.connect();
-    db = mongoClient.db('spreadit_db');
-    strategist = new Strategist(db);
-    console.log("✅ MongoDB & Strategist Connected");
-  } catch (e) {
-    console.warn("⚠️ MongoDB Connection Failed. Strategist running in memory-only mode.");
-    strategist = new Strategist(null);
+if (USE_MONGO) {
+  const mongoClient = new MongoClient(process.env.MONGODB_URI || 'mongodb://localhost:27017');
+  async function connectDB() {
+    try {
+      await mongoClient.connect();
+      db = mongoClient.db(process.env.MONGODB_DB_NAME || 'spreadit_db');
+      strategist = new Strategist(db);
+      console.log("✅ MongoDB & Strategist Connected");
+    } catch (e) {
+      console.warn("⚠️ MongoDB Connection Failed. Strategist running in memory-only mode.");
+      strategist = new Strategist(null);
+    }
   }
+  connectDB();
+} else {
+  strategist = new Strategist(null);
+  console.info("ℹ️ MongoDB disabled (USE_MONGO=false). Strategist running memory-only.");
 }
-connectDB();
 
 try {
   const SQLiteStore = require('connect-sqlite3')(session);
@@ -206,6 +294,12 @@ const upload = multer({
       cb(new Error('Type de fichier non supporté'));
     }
   }
+});
+
+// --- Health endpoint for env validation ---
+app.get('/health/env', (req, res) => {
+  const issues = validateEnv();
+  res.json({ ok: issues.length === 0, issues });
 });
 
 // Middleware
@@ -626,9 +720,17 @@ app.post('/api/ai-edit', express.json(), async (req, res) => {
     const { platform = 'facebook', instruction = '', lockedText = '', aiText = '' } = req.body || {};
     const base = aiText || '';
 
-    const sys = `You are an expert social media editor for ${platform}. Apply the user's instruction to improve the caption. STRICT RULES: 1) Do NOT include or modify LOCKED_TEXT; it will be appended separately. 2) Return only the edited AI section as plain text, no markdown, no quotes. 3) Keep it concise, platform-appropriate.`;
+    // Get real-time market patterns and top performers to ensure cohesion
+    const marketTrends = await strategist.analyzeMarketTrends(platform);
+    const topPerformers = await strategist.analyzeTopPerformers(platform);
 
-    const user = `LOCKED_TEXT (do not modify, do not include):\n${lockedText}\n\nCURRENT_AI_SECTION:\n${base}\n\nINSTRUCTION:\n${instruction}\n\nReturn only the revised AI section.`;
+    const patterns = marketTrends?.patterns || {};
+    const hooks = Array.isArray(patterns.successfulHooks) ? patterns.successfulHooks.slice(0, 3) : [];
+    const topTags = (topPerformers?.topHashtags || []).slice(0, 10).map(h => h.tag).join(' ');
+
+    const sys = `You are an expert ${platform} editor. Apply the user's instruction to improve ONLY the AI section of a post while aligning with current market patterns. STRICT RULES: 1) Do NOT include or modify LOCKED_TEXT; it will be appended separately. 2) Return only the edited AI section as plain text, no markdown, no quotes. 3) Follow platform style: keep length near avgLength=${Math.round(patterns.avgLength || 140)}, emojiRatio~${patterns.emojiRatio||0}, questionRatio~${patterns.questionRatio||0}, hashtagRatio~${patterns.hashtagRatio||0}, ctaRatio~${patterns.ctaRatio||0}. 4) Prefer hooks: ${hooks.join(' | ')}. 5) Prefer proven hashtags when relevant.`;
+
+    const user = `LOCKED_TEXT (do not modify, do not include):\n${lockedText}\n\nCURRENT_AI_SECTION:\n${base}\n\nINSTRUCTION:\n${instruction}\n\nPROVEN_HASHTAGS:\n${topTags}\n\nReturn only the revised AI section.`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4',
