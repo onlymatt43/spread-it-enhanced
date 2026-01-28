@@ -321,15 +321,16 @@
 
         <!-- Instagram Mockup -->
         <div id="instagram-mockup" class="mockup ig-mockup">
+            <div class="ig-header">
+                <span class="text-muted">Create new post</span>
+                <span class="text-primary fw-bold" onclick="spreadIt('instagram')">Share</span>
+            </div>
             <% if (data.video) { %>
                 <video src="<%= data.video %>" class="ig-preview-img" controls></video>
             <% } else { %>
                 <img src="<%= data.image %>" class="ig-preview-img" alt="">
             <% } %>
-                <span class="text-muted">Create new post</span>
-                <span class="text-primary fw-bold" onclick="spreadIt('instagram')">Share</span>
-            </div>
-            <img src="<%= data.image %>" class="ig-preview-img" alt="">
+
             <div class="ig-body">
                 <textarea class="ig-textarea" rows="4" placeholder="Write a caption..."><%= data.text %></textarea>
                 <div class="ai-assistant mt-3">
@@ -391,19 +392,18 @@ function selectPlatform(platform) {
 }
 
 function enhanceText(platform) {
-           content: "Context from: <%= data.title %>",
-           mediaUrl: "<%= data.video || data.image %>",
-           mediaType: "<%= data.video ? 'video' : 'image' %>",
    const btn = event.target;
    const originalText = btn.innerText;
    btn.innerText = 'Thinking...';
    
-   fetch('/api/create-post-ai', { // We'll assume an endpoint exists or use the existing
+   fetch('/api/create-post-ai', {
        method: 'POST',
        headers: {'Content-Type': 'application/json'},
        body: JSON.stringify({
            content: "Context from image: <%= data.title %>",
-           options: { platform: platform, style: 'engaging' }
+           options: { platform: platform, style: 'engaging' },
+           mediaUrl: "<%= data.video || data.image %>",
+           mediaType: "<%= data.video ? 'video' : 'image' %>"
        })
    }).then(res => res.json()).then(data => {
        // Locate textarea in current mockup
