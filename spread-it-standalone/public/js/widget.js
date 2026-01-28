@@ -87,14 +87,14 @@
             btn.style.top = `${top}px`;
             btn.style.left = `${left}px`;
             btn.classList.add('visible');
+            btn.style.pointerEvents = 'auto'; // Active on show
         }
 
         function hideButton() {
             if (hideTimeout) return; // Already scheduling hide
             hideTimeout = setTimeout(() => {
                 btn.classList.remove('visible');
-                // Don't set activeElement to null immediately via variable, just visually hide
-                // activeElement = null; 
+                btn.style.pointerEvents = 'none'; // Ensure click-through when hidden
                 hideTimeout = null;
             }, 300); // Short delay to allow moving mouse to button
         }
