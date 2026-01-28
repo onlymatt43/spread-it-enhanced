@@ -52,10 +52,11 @@
     btn.className = 'spread-it-overlay-btn';
     
     const videoSrc = `${BASE_URL}/assets/logo-video-spread-it.mp4`;
+
     // Fallback to static text/image if video fails
     btn.innerHTML = `
-        <video src="${videoSrc}" autoplay loop muted playsinline class="spread-it-video-btn" onerror="this.style.display='none'; this.nextElementSibling.style.display='block'"></video>
-        <div style="display:none; width:100%; height:100%; background: linear-gradient(45deg, #667eea, #764ba2); color:white; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:12px; text-align:center;">Spread<br>It</div>
+        <video src="${videoSrc}" autoplay loop muted playsinline class="spread-it-video-btn" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'"></video>
+        <div style="display:none; width:100%; height:100%; background: linear-gradient(45deg, #667eea, #764ba2); color:white; align-items:center; justify-content:center; font-weight:bold; font-size:12px; text-align:center;">Spread<br>It</div>
     `;
     
     document.body.appendChild(btn);
@@ -114,28 +115,8 @@
     }, { capture: true }); // Capture phase to catch events early
 
 
-    // Event Delegation for Images and Videos
-    document.addEventListener('mouseover', function(e) {
-        const el = e.target;
-        
-        if (el.tagName === 'IMG' || el.tagName === 'VIDEO') {
-            const width = el.tagName === 'VIDEO' ? el.videoWidth : el.width;
-            const height = el.tagName === 'VIDEO' ? el.videoHeight : el.height;
 
-            // Only show if element has reasonable size (and is loaded)
-            if ((width > MIN_IMAGE_SIZE && height > MIN_IMAGE_SIZE) || (el.offsetWidth > MIN_IMAGE_SIZE)) {
-                activeElement = el;
-                btn.classList.add('visible');
-                positionButton(el);
-            }
-        } else if (el === btn || btn.contains(el)) {
-            // Keep visible if hovering the button itself
-            btn.classList.add('visible');
-        } else {
-            // Hide if not hovering image or button
-            btn.classList.remove('visible');
-        }
-    });
+
 
     // Handle Window Resize / Scroll
     window.addEventListener('scroll', () => {
