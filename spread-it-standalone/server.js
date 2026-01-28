@@ -132,11 +132,12 @@ if (process.env.GOOGLE_CLOUD_VISION_KEY) {
   });
 }
 
-// Configuration MongoDB pour lead generation
-let mongoClient;
-if (process.env.MONGODB_URI) {
-  mongoClient = new MongoClient(process.env.MONGODB_URI);
-}
+// Configuration MongoDB pour lead generation (Utilise l'instance globale déjà initialisée)
+/* 
+ * mongoClient est déjà initialisé plus haut.
+ * On s'assure juste que la référence est disponible si nécessaire.
+ */
+
 
 // Configuration multer pour l'upload de fichiers
 const storage = multer.diskStorage({
