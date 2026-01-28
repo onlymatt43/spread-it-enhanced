@@ -48,6 +48,42 @@ const cookieSecure = process.env.SESSION_COOKIE_SECURE
   : runningOnRender;
 const cookieSameSite = process.env.SESSION_COOKIE_SAMESITE || 'lax';
 
+// --- Helper: format caption & hashtags per platform ---
+function formatForPlatform(platform, caption, hashtags) {
+  const rules = {
+    facebook: { maxLen: 600, maxTags: 3, sepLine: false },
+    instagram: { maxLen: 2200, maxTags: 25, sepLine: true },
+    twitter: { maxLen: 240, maxTags: 4, sepLine: false },
+    tiktok: { maxLen: 150, maxTags: 5, sepLine: false },
+    linkedin: { maxLen: 700, maxTags: 5, sepLine: false }
+  };
+
+  const r = rules[platform] || rules.facebook;
+  let text = (caption || '').trim();
+  // Trim to platform max length
+  if (text.length > r.maxLen) {
+    text = text.slice(0, r.maxLen - 3) + '...';
+  }
+
+  // Normalize hashtags input to array
+  let tagsArr = Array.isArray(hashtags)
+    ? hashtags
+    : (typeof hashtags === 'string' ? hashtags.split(/\s+/) : []);
+  tagsArr = tagsArr.filter(Boolean).map(h => h.startsWith('#') ? h : `#${h}`);
+
+  // Limit number of tags
+  if (tagsArr.length > r.maxTags) {
+    tagsArr = tagsArr.slice(0, r.maxTags);
+  }
+
+  const tagStr = tagsArr.join(' ');
+  if (r.sepLine && tagStr) {
+    return { caption: text, hashtags: tagStr };
+  }
+  // For platforms without separate line, keep hashtags separate field to be appended by caller
+  return { caption: text, hashtags: tagStr };
+}
+
 // Prépare un stockage persistant pour les sessions (fallback multi-stores)
 const sessionBaseDir = path.join(__dirname, 'storage');
 if (!fs.existsSync(sessionBaseDir)) {
@@ -221,14 +257,125 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
         });
         console.log("✅ Download complete:", tempFilePath);
 
-        // 2. Share to each selected platform
-        const results = [];
-        const errors = [];
+        // VÉRIFICATION GLOBALE ANTI-DETECTION
+        if (platforms.length > 2) {
+            console.log(`⚠️  WARNING: Posting to ${platforms.length} platforms simultaneously may trigger Facebook automation detection`);
+            console.log(`💡 RECOMMENDATION: Consider posting to 1-2 platforms max per submission`);
+        }
 
-        // --- REAL IMPLEMENTATION OF SOCIAL POSTING ---
+        // VÉRIFICATION DE FRÉQUENCE GLOBALE: Max 5 posts par heure au total
+        const allRecentPosts = await strategist.getAllRecentPosts(60 * 60 * 1000); // Dernière heure
+        if (allRecentPosts.length + platforms.length > 5) {
+            console.log(`🚨 RATE LIMIT WARNING: ${allRecentPosts.length} posts in last hour + ${platforms.length} new = ${allRecentPosts.length + platforms.length} total`);
+            console.log(`⏳ Facebook may block automation. Consider waiting before posting more.`);
+        }
+
+        // --- ANTI-DETECTION MEASURES ---
+        const postingDelays = {
+            facebook: 2000,  // 2 secondes après le premier
+            instagram: 5000, // 5 secondes après Facebook
+            twitter: 3000,   // 3 secondes après Instagram
+            linkedin: 4000   // 4 secondes après Twitter
+        };
+
+        let delayCounter = 0;
+
         const shareToPlatform = async (platform) => {
              console.log(`📤 Attempting to share to ${platform}...`);
-             
+
+             // DELAY ANTI-DETECTION: Attendre avant de poster
+             if (delayCounter > 0) {
+                 const delay = postingDelays[platform] || 3000;
+                 console.log(`⏱️  Anti-detection delay: waiting ${delay}ms before posting to ${platform}...`);
+                 await new Promise(resolve => setTimeout(resolve, delay));
+             }
+             delayCounter++;
+
+             // VÉRIFICATION DE FRÉQUENCE: Pas plus de 3 posts par heure
+             const recentPosts = await strategist.getRecentPosts(platform, 60 * 60 * 1000); // Dernière heure
+             if (recentPosts.length >= 3) {
+                 console.log(`⚠️  Rate limit: Too many posts to ${platform} in the last hour (${recentPosts.length})`);
+                 return {
+                     success: false,
+                     platform,
+                     error: `Rate limit exceeded: ${recentPosts.length} posts in last hour. Facebook blocks automation.`
+                 };
+             }
+
+             // FORMATAGE SPÉCIFIQUE PAR PLATEFORME (caption + hashtags)
+             const fmt = formatForPlatform(platform, caption, hashtags);
+             let platformCaption = fmt.caption;
+             let platformHashtags = fmt.hashtags;
+
+             // VÉRIFICATION DES URLS (Facebook bloque les liens suspects)
+             const urlRegex = /https?:\/\/[^\s]+/g;
+             const urls = platformCaption.match(urlRegex);
+             if (urls) {
+                 for (const url of urls) {
+                     // Vérifier si c'est une URL suspecte
+                     const suspiciousPatterns = [
+                         /bit\.ly/, /tinyurl/, /goo\.gl/, // URL shorteners
+                         /spam/, /fake/, /scam/, // mots suspects
+                         /adult/, /porn/, /xxx/ // contenu adulte
+                     ];
+
+                     const isSuspicious = suspiciousPatterns.some(pattern => pattern.test(url.toLowerCase()));
+                     if (isSuspicious) {
+                         console.log(`🚨 SUSPICIOUS URL DETECTED: ${url}`);
+                         return {
+                             success: false,
+                             platform,
+                             error: `URL suspecte détectée: ${url}. Facebook peut bloquer ce post.`
+                         };
+                     }
+                 }
+             }
+
+            // VÉRIFICATION SUPPLÉMENTAIRE POUR FACEBOOK/INSTAGRAM (politiques spécifiques)
+            if ((platform === 'facebook' || platform === 'instagram') && mediaType === 'image' && visionClient) {
+              try {
+                console.log(`🔍 Double-checking image for ${platform} compliance...`);
+                const [result] = await visionClient.safeSearchDetection(tempFilePath);
+                const detections = result.safeSearchAnnotation || {};
+
+                // Construire la politique par plateforme avec fallback aux valeurs globales
+                const prefix = platform === 'facebook' ? 'FACEBOOK' : 'INSTAGRAM';
+                const adultBlockLevels = (process.env[`${prefix}_ADULT_BLOCK_LEVELS`] || process.env.ADULT_BLOCK_LEVELS || 'LIKELY,VERY_LIKELY')
+                  .split(',').map(s => s.trim());
+                const violenceBlockLevels = (process.env[`${prefix}_VIOLENCE_BLOCK_LEVELS`] || process.env.VIOLENCE_BLOCK_LEVELS || 'LIKELY,VERY_LIKELY')
+                  .split(',').map(s => s.trim());
+                const racyBlockLevels = (process.env[`${prefix}_RACY_BLOCK_LEVELS`] || process.env.RACY_BLOCK_LEVELS || 'VERY_LIKELY')
+                  .split(',').map(s => s.trim());
+
+                const adultLevel = detections.adult || 'VERY_UNLIKELY';
+                const violenceLevel = detections.violence || 'VERY_UNLIKELY';
+                const racyLevel = detections.racy || 'VERY_UNLIKELY';
+
+                console.log('📊 Platform policy check:', {
+                  platform,
+                  adultLevel,
+                  violenceLevel,
+                  racyLevel,
+                  adultBlockLevels,
+                  violenceBlockLevels,
+                  racyBlockLevels
+                });
+
+                if (adultBlockLevels.includes(adultLevel)) {
+                  return { success: false, platform, error: `Blocked by ${platform} adult policy (${adultLevel})` };
+                }
+                if (violenceBlockLevels.includes(violenceLevel)) {
+                  return { success: false, platform, error: `Blocked by ${platform} violence policy (${violenceLevel})` };
+                }
+                if (racyBlockLevels.includes(racyLevel)) {
+                  // Racy ne bloque qu'à des niveaux élevés (faces autorisées par défaut)
+                  return { success: false, platform, error: `Blocked by ${platform} racy policy (${racyLevel})` };
+                }
+              } catch (e) {
+                console.warn(`Could not verify image for ${platform}:`, e.message);
+              }
+            }
+
              // --- TWITTER / X ---
              if (platform === 'twitter' || platform === 'x') {
                  // Map keys from Render environment (handling variations in naming)
@@ -258,7 +405,7 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
 
                  // Send Tweet (v2)
                  const response = await rwClient.v2.tweet({
-                     text: caption + '\n\n' + hashtags,
+                     text: platformCaption + '\n\n' + platformHashtags,
                      media: mediaId ? { media_ids: [mediaId] } : undefined
                  });
                  
@@ -281,7 +428,7 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
                  if (mediaType === 'image' && tempFilePath) {
                      const form = new FormData();
                      form.append('access_token', fbToken);
-                     form.append('message', caption + '\n\n' + hashtags);
+                     form.append('message', platformCaption + '\n\n' + platformHashtags);
                      form.append('source', fs.createReadStream(tempFilePath)); 
 
                      // Appel API "photos" en mode multipart/form-data
@@ -299,7 +446,7 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
                      let fbEndpoint = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
                      let payload = {
                         access_token: fbToken,
-                        message: caption + '\n\n' + hashtags
+                        message: platformCaption + '\n\n' + platformHashtags
                      };
 
                      if (mediaType === 'image') {
@@ -326,7 +473,7 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
                  const containerEndpoint = `https://graph.facebook.com/v18.0/${process.env.INSTAGRAM_BUSINESS_ID}/media`;
                  const containerRes = await axios.post(containerEndpoint, {
                      image_url: mediaUrl, // MUST be public
-                     caption: caption + '\n\n' + hashtags,
+                     caption: platformCaption + '\n\n' + platformHashtags,
                      access_token: igToken
                  });
                  
@@ -356,12 +503,20 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
              return { success: false, platform, error: "Platform not supported yet" };
         };
 
+        // TRAITEMENT SÉQUENTIEL AVEC DÉLAIS (ANTI-DETECTION)
         for (const platform of platforms) {
             try {
+                console.log(`\n🔄 Processing ${platform}...`);
                 const result = await shareToPlatform(platform);
                 results.push(result);
+
+                if (result.success) {
+                    console.log(`✅ Successfully posted to ${platform}`);
+                } else {
+                    console.log(`❌ Failed to post to ${platform}: ${result.error}`);
+                }
             } catch (err) {
-                console.error(`❌ Failed to share to ${platform}:`, err.message);
+                console.error(`💥 Error posting to ${platform}:`, err.message);
                 errors.push({ platform, error: err.message });
             }
         }
@@ -736,10 +891,9 @@ async function extractContentFromFile(file) {
 }
 
 async function moderateContent(content, mediaPath = null, mediaType = null) {
-  let adultScore = 0;
   let reasons = [];
 
-  // Analyse du texte
+  // Analyse du texte (ne bloque que si plusieurs indicateurs)
   const adultWords = (process.env.ADULT_WORDS || 'porn,xxx,explicit,nude,sex,nsfw,adult').split(',');
   const normalizedContent = typeof content === 'string'
     ? content
@@ -748,55 +902,79 @@ async function moderateContent(content, mediaPath = null, mediaType = null) {
       : String(content);
   const lowerContent = normalizedContent.toLowerCase();
 
+  let keywordHits = 0;
   adultWords.forEach(word => {
-    if (lowerContent.includes(word.trim())) {
-      adultScore += 1;
-      reasons.push(`Mot détecté: ${word.trim()}`);
+    const w = word.trim();
+    if (w && lowerContent.includes(w)) {
+      keywordHits += 1;
+      reasons.push(`Mot détecté: ${w}`);
     }
   });
 
-  // Analyse de l'image avec Google Vision (uniquement pour les images)
-  if (mediaPath && mediaType === 'image' && visionClient && fs.existsSync(mediaPath)) {
+  // Seuil texte: bloquer seulement si >=2 mots sensibles détectés
+  let blocked = keywordHits >= (parseInt(process.env.TEXT_BLOCK_THRESHOLD || '2', 10));
+
+  // Analyse de l'image/vidéo avec Google Vision (images uniquement ici)
+  if (!blocked && mediaPath && mediaType === 'image' && visionClient && fs.existsSync(mediaPath)) {
     try {
+      console.log('🔍 Analyzing image content with Google Vision...');
       const [result] = await visionClient.safeSearchDetection(mediaPath);
-      const detections = result.safeSearchAnnotation;
+      const detections = result.safeSearchAnnotation || {};
 
-      if (detections) {
-        // Calculer un score basé sur les détections
-        const scores = {
-          adult: detections.adult || 'VERY_UNLIKELY',
-          violence: detections.violence || 'VERY_UNLIKELY',
-          racy: detections.racy || 'VERY_UNLIKELY'
-        };
+      console.log('📊 Vision API Results:', {
+        adult: detections.adult,
+        violence: detections.violence,
+        racy: detections.racy,
+        medical: detections.medical,
+        spoof: detections.spoof
+      });
 
-        const scoreMap = {
-          'VERY_UNLIKELY': 0,
-          'UNLIKELY': 0.25,
-          'POSSIBLE': 0.5,
-          'LIKELY': 0.75,
-          'VERY_LIKELY': 1
-        };
+      // Définir les niveaux de blocage proches des plateformes (faces autorisées)
+      const adultBlockLevels = (process.env.ADULT_BLOCK_LEVELS || 'LIKELY,VERY_LIKELY').split(',').map(s => s.trim());
+      const violenceBlockLevels = (process.env.VIOLENCE_BLOCK_LEVELS || 'LIKELY,VERY_LIKELY').split(',').map(s => s.trim());
+      const racyBlockLevels = (process.env.RACY_BLOCK_LEVELS || 'VERY_LIKELY').split(',').map(s => s.trim());
 
-        const imageScore = Math.max(
-          scoreMap[scores.adult] || 0,
-          scoreMap[scores.violence] || 0,
-          scoreMap[scores.racy] || 0
-        );
+      const adultLevel = detections.adult || 'VERY_UNLIKELY';
+      const violenceLevel = detections.violence || 'VERY_UNLIKELY';
+      const racyLevel = detections.racy || 'VERY_UNLIKELY';
 
-        adultScore += imageScore * 2; // Pondération plus forte pour l'image
+      if (adultBlockLevels.includes(adultLevel)) {
+        blocked = true;
+        reasons.push(`Blocage Adult: niveau=${adultLevel}`);
+      } else if (violenceBlockLevels.includes(violenceLevel)) {
+        blocked = true;
+        reasons.push(`Blocage Violence: niveau=${violenceLevel}`);
+      } else if (racyBlockLevels.includes(racyLevel)) {
+        // Racy ne bloque que aux niveaux très élevés (faces autorisées)
+        blocked = true;
+        reasons.push(`Blocage Racy: niveau=${racyLevel}`);
+      }
 
-        if (imageScore > 0.5) {
-          reasons.push(`Contenu image détecté: ${scores.adult}/${scores.violence}/${scores.racy}`);
-        }
+      // Calcul d'un score indicatif (non bloquant, utile pour logs/UI)
+      const scoreMap = {
+        'VERY_UNLIKELY': 0,
+        'UNLIKELY': 0.25,
+        'POSSIBLE': 0.5,
+        'LIKELY': 0.75,
+        'VERY_LIKELY': 1
+      };
+      const imageScore = Math.max(
+        scoreMap[adultLevel] || 0,
+        scoreMap[violenceLevel] || 0,
+        scoreMap[racyLevel] || 0
+      );
+      if (imageScore >= 0.5 && !blocked) {
+        console.log('⚠️ Contenu potentiellement sensible (autorisé):', { adultLevel, violenceLevel, racyLevel });
       }
     } catch (error) {
-      console.error('Erreur Google Vision:', error);
+      console.error('❌ Google Vision Error:', error.message);
     }
   }
 
   return {
-    safe: adultScore < 2,
-    score: adultScore,
+    safe: !blocked,
+    // Score indicatif: nb de mots sensibles + score image (max)
+    score: keywordHits,
     reasons: reasons
   };
 }

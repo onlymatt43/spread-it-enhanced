@@ -1,6 +1,7 @@
 const OpenAI = require('openai');
 const moment = require('moment');
 const googleTrends = require('google-trends-api');
+const axios = require('axios');
 
 // Ce service agit comme le "Cerveau Stratégique"
 // Il combine l'analyse de marché, l'historique et les règles de plateforme.
@@ -9,6 +10,8 @@ class Strategist {
     constructor(db) {
         this.db = db; // MongoDB Connection
         this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        this.marketCache = new Map(); // Cache pour les analyses de marché
+        this.cacheExpiry = 30 * 60 * 1000; // 30 minutes
     }
 
     /**
@@ -45,7 +48,10 @@ class Strategist {
         // 5. Étudier les posts performants pour s'en inspirer
         const topPerformers = await this.analyzeTopPerformers(targetPlatform);
 
-        // 6. Générer l'optimisation via GPT-4 avec apprentissage profond
+        // 6. Analyser le marché en temps réel pour éviter les cercles vicieux
+        const marketTrends = await this.analyzeMarketTrends(targetPlatform);
+
+        // 7. Générer l'optimisation via GPT-4 avec apprentissage profond
         let prompt = "";
 
         if (action === 'generate_hashtags') {
@@ -112,6 +118,19 @@ class Strategist {
                 - Patterns de succès passés: ${successPatterns.description}
                 - Score moyen d'engagement historique: ${successPatterns.avgEngagement}%
 
+                ANALYSE DE MARCHÉ EN TEMPS RÉEL (ANTI-CERCLE VICIEUX):
+                - Source: ${marketTrends.source}
+                - Posts viraux analysés: ${marketTrends.topPosts?.length || 0}
+                - Longueur moyenne des posts gagnants: ${marketTrends.patterns?.avgLength || 120} caractères
+                - Ratio d'emojis dans le marché: ${(marketTrends.patterns?.emojiRatio || 0.3) * 100}%
+                - Ratio de questions: ${(marketTrends.patterns?.questionRatio || 0.2) * 100}%
+                - Ratio de hashtags: ${(marketTrends.patterns?.hashtagRatio || 0.8) * 100}%
+                - Ratio de CTA: ${(marketTrends.patterns?.ctaRatio || 0.15) * 100}%
+                - Engagement moyen du marché: ${marketTrends.patterns?.avgEngagement || 500}
+
+                HOOKS RÉUSSIS DU MARCHÉ À COPIER:
+                ${marketTrends.patterns?.successfulHooks?.slice(0, 3).map(h => `"${h}"`).join('\n') || 'Pas de hooks disponibles'}
+
                 CONTENU DE BASE:
                 "${content}"
 
@@ -121,18 +140,19 @@ class Strategist {
                 3. AJOUTE LES BONS HASHTAGS: Utilise ceux qui ont déjà prouvé leur efficacité
                 4. RESPECTE LES PROPORTIONS: Même ratio d'emojis, questions, CTA que les gagnants
                 5. OPTIMISE LA LONGUEUR: Vise la longueur moyenne des posts réussis
+                6. ÉVITE LES CERCLES VICIEUX: Intègre les patterns du marché actuel, pas seulement ton historique
+                7. COPIE LES HOOKS VIRALS: Utilise les accroches qui marchent vraiment en ce moment
 
                 FORMAT JSON ATTENDU:
                 {
                     "optimized_text": "Le texte final qui copie les gagnants...",
                     "reasoning": "J'ai copié la structure X des posts à Y% d'engagement",
-                    "estimated_virality_score": ${Math.min(100, (topPerformers.avgEngagement || 0) + 25)},
+                    "estimated_virality_score": ${Math.min(100, Math.round(((topPerformers.avgEngagement || 0) + (marketTrends.patterns?.avgEngagement || 0) / 10) / 2 + 25))},
                     "best_time_to_post": "${insights.bestTime}",
-                    "predicted_engagement": "${topPerformers.avgEngagement || 8}%",
-                    "copied_patterns": ["structure_${Object.keys(topPerformers.commonPatterns?.topStructures || {}).sort((a,b) => (topPerformers.commonPatterns.topStructures[b] || 0) - (topPerformers.commonPatterns.topStructures[a] || 0))[0] || 'balanced'}", "style_${Object.keys(topPerformers.commonPatterns?.topStyles || {}).sort((a,b) => (topPerformers.commonPatterns.topStyles[b] || 0) - (topPerformers.commonPatterns.topStyles[a] || 0))[0] || 'direct'}"]
+                    "predicted_engagement": "${Math.round(((topPerformers.avgEngagement || 8) + (marketTrends.patterns?.avgEngagement || 500) / 50) / 2)}%",
+                    "copied_patterns": ["structure_${Object.keys(topPerformers.commonPatterns?.topStructures || {}).sort((a,b) => (topPerformers.commonPatterns.topStructures[b] || 0) - (topPerformers.commonPatterns.topStructures[a] || 0))[0] || 'balanced'}", "style_${Object.keys(topPerformers.commonPatterns?.topStyles || {}).sort((a,b) => (topPerformers.commonPatterns.topStyles[b] || 0) - (topPerformers.commonPatterns.topStyles[a] || 0))[0] || 'direct'}", "market_hook_${marketTrends.patterns?.successfulHooks?.length > 0 ? 'viral' : 'standard'}"]
                 }
             `;
-        }
         }
 
         try {
@@ -811,6 +831,364 @@ class Strategist {
         } catch (e) {
             console.error("Learned patterns analysis error:", e);
             return { bestStructure: 'learning', topStyle: 'learning' };
+        }
+    }
+
+    /**
+     * Analyse les posts viraux du marché en temps réel
+     */
+    async analyzeMarketTrends(platform = 'instagram') {
+        const cacheKey = `market_${platform}`;
+        const cached = this.marketCache.get(cacheKey);
+        
+        if (cached && (Date.now() - cached.timestamp) < this.cacheExpiry) {
+            return cached.data;
+        }
+
+        try {
+            console.log(`🔍 Analyzing real-time market trends on ${platform}...`);
+            
+            let marketData;
+            if (platform === 'instagram') {
+                marketData = await this.analyzeInstagramMarket();
+            } else if (platform === 'twitter') {
+                marketData = await this.analyzeTwitterMarket();
+            } else if (platform === 'facebook') {
+                marketData = await this.analyzeFacebookMarket();
+            } else if (platform === 'tiktok') {
+                marketData = await this.analyzeTikTokMarket();
+            }
+
+            this.marketCache.set(cacheKey, { data: marketData, timestamp: Date.now() });
+            return marketData;
+        } catch (e) {
+            console.error(`Market analysis error for ${platform}:`, e);
+            return this.getFallbackMarketData(platform);
+        }
+    }
+
+    /**
+     * Analyse du marché Instagram en temps réel
+     */
+    async analyzeInstagramMarket() {
+        const competitors = await this.getCompetitorList();
+        const viralPosts = [];
+        
+        for (const competitor of competitors.slice(0, 5)) { // Analyser top 5 concurrents
+            try {
+                const posts = await this.fetchInstagramTopPosts(competitor);
+                viralPosts.push(...posts);
+            } catch (e) {
+                console.warn(`Failed to analyze ${competitor}:`, e.message);
+            }
+        }
+
+        // Trier par engagement et prendre les top 20
+        const topPosts = viralPosts
+            .sort((a, b) => b.engagement - a.engagement)
+            .slice(0, 20);
+
+        // Analyser les patterns
+        const patterns = this.analyzeViralPatterns(topPosts);
+        
+        return {
+            platform: 'instagram',
+            topPosts: topPosts,
+            patterns: patterns,
+            competitorsAnalyzed: competitors.length,
+            timestamp: new Date(),
+            source: 'real_market_data'
+        };
+    }
+
+    /**
+     * Récupère les posts populaires d'un compte Instagram
+     */
+    async fetchInstagramTopPosts(username) {
+        const igToken = process.env.INSTAGRAM_ACCESS_TOKEN;
+        const igBusinessId = process.env.INSTAGRAM_BUSINESS_ID;
+        
+        if (!igToken || !igBusinessId) {
+            throw new Error('Instagram API credentials missing');
+        }
+
+        try {
+            // Utiliser Business Discovery API pour analyser un concurrent
+            const url = `https://graph.facebook.com/v18.0/${igBusinessId}?fields=business_discovery.username(${username}){media{caption,like_count,comments_count,media_type,timestamp,permalink}}&access_token=${igToken}`;
+            
+            const response = await axios.get(url);
+            const media = response.data.business_discovery.media.data;
+            
+            return media.slice(0, 10).map(post => ({
+                caption: post.caption || '',
+                likes: post.like_count || 0,
+                comments: post.comments_count || 0,
+                engagement: (post.like_count || 0) + (post.comments_count || 0),
+                mediaType: post.media_type,
+                timestamp: post.timestamp,
+                permalink: post.permalink,
+                username: username
+            }));
+        } catch (e) {
+            console.error(`Instagram API error for ${username}:`, e);
+            return [];
+        }
+    }
+
+    /**
+     * Analyse du marché Twitter
+     */
+    async analyzeTwitterMarket() {
+        // Pour Twitter, on analyse les tweets populaires sur des hashtags tendances
+        const trends = await this.getRealTimeTrends();
+        const topTrends = trends.items.slice(0, 3);
+        
+        const viralTweets = [];
+        
+        // Note: Twitter API v2 ne permet pas facilement de récupérer les tweets populaires
+        // On simule avec des données basées sur les trends
+        for (const trend of topTrends) {
+            viralTweets.push({
+                text: `People are talking about ${trend} right now! 🔥`,
+                engagement: Math.floor(Math.random() * 1000) + 500,
+                trend: trend
+            });
+        }
+
+        return {
+            platform: 'twitter',
+            trends: topTrends,
+            viralTweets: viralTweets,
+            patterns: {
+                trendingTopics: topTrends,
+                avgEngagement: viralTweets.reduce((sum, t) => sum + t.engagement, 0) / viralTweets.length
+            },
+            timestamp: new Date(),
+            source: 'trends_based'
+        };
+    }
+
+    /**
+     * Analyse du marché Facebook
+     */
+    async analyzeFacebookMarket() {
+        // Analyser les posts populaires de pages similaires
+        const similarPages = ['cnn', 'bbcnews', 'natgeo']; // Pages populaires
+        
+        const viralPosts = [];
+        
+        for (const page of similarPages) {
+            try {
+                const posts = await this.fetchFacebookTopPosts(page);
+                viralPosts.push(...posts);
+            } catch (e) {
+                console.warn(`Failed to analyze Facebook page ${page}`);
+            }
+        }
+
+        return {
+            platform: 'facebook',
+            viralPosts: viralPosts.sort((a, b) => b.engagement - a.engagement).slice(0, 10),
+            patterns: this.analyzeViralPatterns(viralPosts),
+            timestamp: new Date(),
+            source: 'popular_pages'
+        };
+    }
+
+    /**
+     * Analyse du marché TikTok (approche proxy)
+     * TikTok n'offre pas une API simple publique pour les tendances.
+     * On utilise une approche basée sur des patterns génériques et des signaux externes.
+     */
+    async analyzeTikTokMarket() {
+        // Simuler des données de marché avec des patterns typiques de TikTok
+        const trendingHooks = [
+            "POV:",
+            "Nobody's talking about this",
+            "3 things I wish I knew",
+            "Stop scrolling",
+            "You need to try this"
+        ];
+
+        const patterns = {
+            avgLength: 80,
+            emojiRatio: 0.3,
+            questionRatio: 0.25,
+            hashtagRatio: 0.6,
+            ctaRatio: 0.2,
+            successfulHooks: trendingHooks,
+            avgEngagement: 1200
+        };
+
+        return {
+            platform: 'tiktok',
+            topPosts: [], // Sans API officielle, non disponible
+            patterns,
+            competitorsAnalyzed: 0,
+            timestamp: new Date(),
+            source: 'proxy_patterns'
+        };
+    }
+
+    /**
+     * Récupère les posts populaires d'une page Facebook
+     */
+    async fetchFacebookTopPosts(pageId) {
+        const fbToken = process.env.FACEBOOK_ACCESS_TOKEN;
+        
+        if (!fbToken) {
+            throw new Error('Facebook API credentials missing');
+        }
+
+        try {
+            const url = `https://graph.facebook.com/v18.0/${pageId}/posts?fields=message,likes.summary(true),comments.summary(true),shares,created_time,permalink_url&limit=10&access_token=${fbToken}`;
+            const response = await axios.get(url);
+            
+            return response.data.data.map(post => ({
+                message: post.message || '',
+                likes: post.likes?.summary?.total_count || 0,
+                comments: post.comments?.summary?.total_count || 0,
+                shares: post.shares?.count || 0,
+                engagement: (post.likes?.summary?.total_count || 0) + (post.comments?.summary?.total_count || 0) + (post.shares?.count || 0),
+                timestamp: post.created_time,
+                permalink: post.permalink_url
+            }));
+        } catch (e) {
+            console.error(`Facebook API error for ${pageId}:`, e);
+            return [];
+        }
+    }
+
+    /**
+     * Analyse les patterns des posts viraux
+     */
+    analyzeViralPatterns(posts) {
+        if (!posts || posts.length === 0) return {};
+
+        const patterns = {
+            avgLength: 0,
+            emojiRatio: 0,
+            questionRatio: 0,
+            hashtagRatio: 0,
+            ctaRatio: 0,
+            commonWords: {},
+            commonPhrases: {},
+            successfulHooks: [],
+            avgEngagement: 0
+        };
+
+        let totalLength = 0;
+        let emojiCount = 0;
+        let questionCount = 0;
+        let hashtagCount = 0;
+        let ctaCount = 0;
+        let totalEngagement = 0;
+
+        posts.forEach(post => {
+            const text = post.caption || post.message || post.text || '';
+            if (!text) return;
+
+            totalLength += text.length;
+            totalEngagement += post.engagement || 0;
+
+            // Analyser emojis
+            const emojis = text.match(/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu);
+            if (emojis) emojiCount += emojis.length;
+
+            // Analyser questions
+            if (text.includes('?')) questionCount++;
+
+            // Analyser hashtags
+            const hashtags = text.match(/#\w+/g);
+            if (hashtags) hashtagCount += hashtags.length;
+
+            // Analyser CTA
+            if (/\b(follow|like|comment|share|dm|message|tag|save)\b/i.test(text)) ctaCount++;
+
+            // Extraire hooks réussis (premières phrases)
+            const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+            if (sentences.length > 0) {
+                patterns.successfulHooks.push(sentences[0].trim());
+            }
+        });
+
+        patterns.avgLength = Math.round(totalLength / posts.length);
+        patterns.emojiRatio = emojiCount / posts.length;
+        patterns.questionRatio = questionCount / posts.length;
+        patterns.hashtagRatio = hashtagCount / posts.length;
+        patterns.ctaRatio = ctaCount / posts.length;
+        patterns.avgEngagement = Math.round(totalEngagement / posts.length);
+
+        return patterns;
+    }
+
+    /**
+     * Liste des concurrents à analyser (peut être configurée dynamiquement)
+     */
+    async getCompetitorList() {
+        // Pour l'instant, liste statique de comptes populaires
+        // À l'avenir, pourrait être dynamique basé sur le secteur
+        return [
+            'instagram',
+            'cristiano',
+            'leomessi',
+            'selenagomez',
+            'arianagrande',
+            'natgeo',
+            'nasa',
+            'natgeowild'
+        ];
+    }
+
+    /**
+     * Obtient les heures optimales de posting pour une plateforme
+     */
+    async getOptimalPostingHours(platform) {
+        if (!this.db) return [9, 12, 15, 18, 21]; // Heures par défaut
+
+        try {
+            const pipeline = [
+                { $match: { platform: platform, engagement: { $gt: 0 } } },
+                {
+                    $group: {
+                        _id: { $hour: "$posted_at" },
+                        avgEngagement: { $avg: "$engagement" },
+                        count: { $sum: 1 }
+                    }
+                },
+                { $sort: { avgEngagement: -1 } },
+                { $limit: 5 }
+            ];
+
+            const results = await this.db.collection('post_history').aggregate(pipeline).toArray();
+            const optimalHours = results.map(r => r._id).filter(h => h !== null);
+
+            return optimalHours.length > 0 ? optimalHours : [9, 12, 15, 18, 21];
+        } catch (e) {
+            console.error("Error getting optimal hours:", e);
+            return [9, 12, 15, 18, 21]; // Fallback
+        }
+    }
+
+    /**
+     * Obtient tous les posts récents (toutes plateformes) pour vérifier la fréquence globale
+     */
+    async getAllRecentPosts(timeWindowMs = 60 * 60 * 1000) { // 1 heure par défaut
+        if (!this.db) return [];
+
+        try {
+            const since = new Date(Date.now() - timeWindowMs);
+            const posts = await this.db.collection('post_history')
+                .find({
+                    posted_at: { $gte: since }
+                })
+                .sort({ posted_at: -1 })
+                .toArray();
+
+            return posts;
+        } catch (e) {
+            console.error("Error getting all recent posts:", e);
+            return [];
         }
     }
 }
