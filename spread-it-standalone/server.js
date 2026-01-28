@@ -268,6 +268,20 @@ app.get('/create', (req, res) => {
   });
 });
 
+app.get('/smart-share', (req, res) => {
+    const { image, video, title, text, source } = req.query;
+    res.render('smart-share', {
+        title: 'Smart Share',
+        data: {
+            image,
+            video,
+            title,
+            text,
+            source
+        }
+    });
+});
+
 app.post('/create', upload.single('content_file'), async (req, res) => {
   try {
     let content = req.body.content || '';
