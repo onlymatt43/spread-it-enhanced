@@ -250,8 +250,6 @@ app.post('/api/create-post-ai', express.json(), async (req, res) => {
         else enhanced = `✨ ${content} \n\nFound this amazing content and had to share! What do you think?`;
 
         res.json({ content: enhanced });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
     }
 });
 
