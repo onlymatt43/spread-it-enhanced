@@ -78,9 +78,13 @@ class Spread_It_Connect {
                 'spread-it-widget', 
                 $app_url . '/js/widget.js', 
                 [], 
-                '1.0.0', 
+                '1.0.1', 
                 true
             );
+
+            wp_localize_script('spread-it-widget', 'spreadItConfig', [
+                'baseUrl' => $app_url
+            ]);
         }
     }
 }

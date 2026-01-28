@@ -2,7 +2,9 @@
     console.log("🚀 Spread It Widget Loaded");
     
     // Configuration
-    const BASE_URL = document.currentScript ? document.currentScript.src.split('/js/widget.js')[0] : '';
+    const BASE_URL = (window.spreadItConfig && window.spreadItConfig.baseUrl) || 
+                     (document.currentScript ? document.currentScript.src.split('/js/widget.js')[0] : '');
+                     
     if (!BASE_URL) {
         console.error("Spread It: Could not determine Base URL");
         return;
