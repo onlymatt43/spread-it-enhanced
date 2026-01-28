@@ -369,6 +369,21 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
         // 3. Cleanup temp file
         fs.unlinkSync(tempFilePath);
 
+        // 4. Record successful posts for learning
+        for (const result of results) {
+            if (result.success && result.id) {
+                await strategist.recordPostLaunch({
+                    post_id: result.id,
+                    platform: result.platform,
+                    content_generated: caption,
+                    strategy_used: "AI optimized with trends and competition analysis",
+                    posted_at_time: new Date().toTimeString().split(' ')[0],
+                    media_type: mediaType,
+                    hashtags_used: hashtags
+                });
+            }
+        }
+
         res.json({ 
             success: errors.length === 0, 
             results, 
@@ -447,6 +462,37 @@ app.post('/api/create-post-ai', express.json(), async (req, res) => {
         else enhanced = `✨ ${content} \n\nFound this amazing content and had to share! What do you think?`;
 
         res.json({ content: enhanced });
+    }
+});
+
+// --- NOUVELLE ROUTE : MISE À JOUR DES PERFORMANCES (LEARNING LOOP) ---
+app.post('/api/update-post-performance', express.json(), async (req, res) => {
+    try {
+        const { postId, platform, postUrl } = req.body;
+        
+        console.log(`📊 Updating performance for ${platform} post: ${postId}`);
+        
+        // Récupérer les vraies métriques depuis l'API sociale
+        const performance = await strategist.fetchPostPerformance(platform, postId, postUrl);
+        
+        // Mettre à jour la base de données
+        await strategist.updatePostPerformance(postId, performance);
+        
+        res.json({ success: true, performance });
+    } catch (error) {
+        console.error("Performance update error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// --- NOUVELLE ROUTE : DASHBOARD D'APPRENTISSAGE ---
+app.get('/api/learning-dashboard', async (req, res) => {
+    try {
+        const dashboard = await strategist.getLearningDashboard();
+        res.json(dashboard);
+    } catch (error) {
+        console.error("Dashboard error:", error);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
@@ -1164,5 +1210,156 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(`Spread It server running on port ${PORT}`);
   });
 }
+
+// --- ROUTE POUR LE DASHBOARD D'APPRENTISSAGE ---
+app.get('/learning-dashboard', (req, res) => {
+    res.send(`
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Learning Dashboard - Spread It</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="mb-4">🤖 AI Learning Dashboard</h1>
+        
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Posts</h5>
+                        <h2 id="totalPosts">-</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Avg Engagement</h5>
+                        <h2 id="avgEngagement">-%</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Learning Status</h5>
+                        <h2 id="learningStatus">-</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">Platform Performance</div>
+                    <div class="card-body">
+                        <canvas id="platformChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">Best Performing Posts</div>
+                    <div class="card-body">
+                        <div id="bestPosts" class="list-group"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">Recent Posts & Learning</div>
+                    <div class="card-body">
+                        <div id="recentPosts" class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Platform</th>
+                                        <th>Content</th>
+                                        <th>Engagement</th>
+                                        <th>Posted</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recentTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadDashboard() {
+            try {
+                const response = await fetch('/api/learning-dashboard');
+                const data = await response.json();
+                
+                document.getElementById('totalPosts').textContent = data.totalPosts || 0;
+                document.getElementById('avgEngagement').textContent = data.averageEngagement + '%';
+                document.getElementById('learningStatus').textContent = data.learningEfficiency || 'Unknown';
+                
+                // Platform Chart
+                const ctx = document.getElementById('platformChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.platformStats?.map(p => p._id) || [],
+                        datasets: [{
+                            label: 'Average Engagement %',
+                            data: data.platformStats?.map(p => Math.round(p.avgEngagement * 100) / 100) || [],
+                            backgroundColor: 'rgba(54, 162, 235, 0.5)'
+                        }]
+                    }
+                });
+                
+                // Best Posts
+                const bestPostsDiv = document.getElementById('bestPosts');
+                if (data.bestPerforming) {
+                    data.bestPerforming.forEach(post => {
+                        const item = document.createElement('div');
+                        item.className = 'list-group-item';
+                        item.innerHTML = \`
+                            <strong>\${post.platform}</strong> - \${post.engagement}% engagement<br>
+                            <small>\${post.content}</small>
+                        \`;
+                        bestPostsDiv.appendChild(item);
+                    });
+                }
+                
+                // Recent Posts Table
+                const tbody = document.getElementById('recentTableBody');
+                if (data.recentPosts) {
+                    data.recentPosts.forEach(post => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = \`
+                            <td>\${post.platform}</td>
+                            <td>\${post.content}</td>
+                            <td>\${post.engagement}</td>
+                            <td>\${new Date(post.posted).toLocaleDateString()}</td>
+                        \`;
+                        tbody.appendChild(row);
+                    });
+                }
+                
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+            }
+        }
+        
+        loadDashboard();
+    </script>
+</body>
+</html>
+    `);
+});
 
 module.exports = app;
