@@ -3,8 +3,14 @@ const fs = require('fs');
 
 class VideoAI {
     constructor() {
-        // Initialize client (assumes GOOGLE_APPLICATION_CREDENTIALS or similar setup in env)
-        this.client = new videoIntelligence.VideoIntelligenceServiceClient();
+        try {
+            // Initialize client (assumes GOOGLE_APPLICATION_CREDENTIALS or similar setup in env)
+            // If missing, it might throw or just log warnings. We catch just in case.
+            this.client = new videoIntelligence.VideoIntelligenceServiceClient();
+        } catch (e) {
+            console.warn("⚠️ Google Video Intelligence Client failed to initialize:", e.message);
+            this.client = null;
+        }
     }
 
     /**
@@ -12,12 +18,11 @@ class VideoAI {
      * pour déterminer le "contexte" et la "sûreté" avant publication.
      */
     async analyzeVideo(gcsUri) {
-        // Note: Google Video Intelligence préfère les fichiers sur GCS (Google Cloud Storage).
-        // Si fichier local, il faut le lire en base64 pour les petites vidéos (< 10MB) ou l'uploader.
-        // Ici on assume une URI GCS ou on simule pour l'exemple local.
-        
-        const request = {
-            inputUri: gcsUri,
+        if (!this.client) {
+            console.log("⚠️ Video AI skipped (No Client)");
+            return { summary: [], pacing: 'unknown', safety: 'unknown', is_simulation: true };
+        }
+
             features: ['LABEL_DETECTION', 'SHOT_CHANGE_DETECTION', 'EXPLICIT_CONTENT_DETECTION'],
         };
 
