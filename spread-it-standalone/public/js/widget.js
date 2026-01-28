@@ -53,11 +53,11 @@
     btn.innerHTML = '<span class="spread-it-icon"></span> Spread It';
     document.body.appendChild(btn);
 
-    let activeImage = null;
+    let activeElement = null;
 
     // Function to calculate position
-    function positionButton(img) {
-        const rect = img.getBoundingClientRect();
+    function positionButton(el) {
+        const rect = el.getBoundingClientRect();
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
         const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
 
@@ -65,16 +65,21 @@
         btn.style.left = (rect.left + scrollLeft + 10) + 'px';
     }
 
-    // Event Delegation for Images
+    // Event Delegation for Images and Videos
     document.addEventListener('mouseover', function(e) {
-        if (e.target.tagName === 'IMG') {
-            const img = e.target;
-            if (img.width > MIN_IMAGE_SIZE && img.height > MIN_IMAGE_SIZE) {
-                activeImage = img;
+        const el = e.target;
+        
+        if (el.tagName === 'IMG' || el.tagName === 'VIDEO') {
+            const width = el.tagName === 'VIDEO' ? el.videoWidth : el.width;
+            const height = el.tagName === 'VIDEO' ? el.videoHeight : el.height;
+
+            // Only show if element has reasonable size (and is loaded)
+            if ((width > MIN_IMAGE_SIZE && height > MIN_IMAGE_SIZE) || (el.offsetWidth > MIN_IMAGE_SIZE)) {
+                activeElement = el;
                 btn.classList.add('visible');
-                positionButton(img);
+                positionButton(el);
             }
-        } else if (e.target === btn || btn.contains(e.target)) {
+        } else if (el === btn || btn.contains(el)) {
             // Keep visible if hovering the button itself
             btn.classList.add('visible');
         } else {
@@ -85,8 +90,8 @@
 
     // Handle Window Resize / Scroll
     window.addEventListener('scroll', () => {
-        if (activeImage && btn.classList.contains('visible')) {
-            positionButton(activeImage);
+        if (activeElement && btn.classList.contains('visible')) {
+            positionButton(activeElement);
         }
     });
 
@@ -95,22 +100,30 @@
         e.preventDefault();
         e.stopPropagation();
 
-        if (!activeImage) return;
+        if (!activeElement) return;
 
-        const imageUrl = activeImage.src;
+        let mediaUrl = activeElement.src;
+        // For video tags that use <source> children
+        if (activeElement.tagName === 'VIDEO' && !mediaUrl) {
+           const source = activeElement.querySelector('source');
+           if (source) mediaUrl = source.src;
+        }
+
         const pageUrl = window.location.href;
         const pageTitle = document.title;
-        const altText = activeImage.alt || '';
+        const altText = activeElement.alt || activeElement.getAttribute('aria-label') || '';
+        const isVideo = activeElement.tagName === 'VIDEO';
 
         // Construct URL
         const params = new URLSearchParams({
-            image: imageUrl,
+            [isVideo ? 'video' : 'image']: mediaUrl,
             source: pageUrl,
             title: pageTitle,
             text: altText
         });
 
         const targetUrl = `${BASE_URL}/smart-share?${params.toString()}`;
+
 
         // Open Popup
         const width = 1000;

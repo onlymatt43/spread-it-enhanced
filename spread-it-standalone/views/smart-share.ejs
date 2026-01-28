@@ -260,7 +260,9 @@
         </div>
 
         <h6>Source Detected</h6>
-        <% if (data.image) { %>
+        <% if (data.video) { %>
+            <video src="<%= data.video %>" class="source-preview-img" controls style="max-height: 250px; background:black;"></video>
+        <% } else if (data.image) { %>
             <img src="<%= data.image %>" class="source-preview-img" alt="Captured content">
         <% } %>
         <p class="small text-muted mb-4"><i class="fas fa-link"></i> <%= data.title %></p>
@@ -297,7 +299,11 @@
             </div>
             <textarea class="fb-textarea" placeholder="What's on your mind?"><%= data.text %></textarea>
             <div class="fb-media">
-                <img src="<%= data.image %>" alt="">
+                <% if (data.video) { %>
+                    <video src="<%= data.video %>" controls style="width:100%; border-radius:8px;"></video>
+                <% } else { %>
+                    <img src="<%= data.image %>" alt="">
+                <% } %>
             </div>
             
             <div class="ai-assistant">
@@ -315,7 +321,11 @@
 
         <!-- Instagram Mockup -->
         <div id="instagram-mockup" class="mockup ig-mockup">
-            <div class="ig-header">
+            <% if (data.video) { %>
+                <video src="<%= data.video %>" class="ig-preview-img" controls></video>
+            <% } else { %>
+                <img src="<%= data.image %>" class="ig-preview-img" alt="">
+            <% } %
                 <span class="text-muted">Create new post</span>
                 <span class="text-primary fw-bold" onclick="spreadIt('instagram')">Share</span>
             </div>
@@ -334,7 +344,12 @@
                 <button class="tw-btn spread-pulse" onclick="spreadIt('twitter')">Post</button>
                 <div style="clear:both"></div>
             </div>
-            <div class="tw-body">
+            <div cla
+                    <% if (data.video) { %>
+                        <video src="<%= data.video %>" controls style="width:100%; border-radius:16px; border:1px solid #eee;"></video>
+                    <% } else { %>
+                        <img src="<%= data.image %>" style="width:100%; border-radius:16px; border:1px solid #eee;" alt="">
+                    <% } %
                 <div class="fb-avatar" style="width:48px;height:48px;"></div>
                 <div class="tw-input-area">
                     <textarea class="tw-textarea" rows="3" placeholder="What is happening?"><%= data.text %></textarea>
@@ -346,7 +361,11 @@
                 </div>
             </div>
         </div>
-
+% if (data.video) { %>
+                    <video src="<%= data.video %>" controls style="width:100%; border-radius:8px;"></video>
+                <% } else { %>
+                    <img src="<%= data.image %>" alt="">
+                <% } %
         <!-- LinkedIn Mockup (Reusing FB minimal style for now) -->
         <div id="linkedin-mockup" class="mockup fb-mockup">
              <div class="fb-header">
