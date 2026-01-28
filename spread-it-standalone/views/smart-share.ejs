@@ -260,9 +260,13 @@
         </div>
 
         <% 
-            let sourceIsEmbed = false;
-            if(data.video && (data.video.includes('youtube') || data.video.includes('vimeo') || data.video.includes('player'))) {
-               sourceIsEmbed = true;
+            let sourceIsEmbed = true; // Default to embed (iframe) for unknown video sources
+            if (data.video) {
+                // Only treat as native raw video if it explicitly ends in a video extension
+                const v = data.video.toLowerCase().split('?')[0]; // Ignore query params
+                if (v.endsWith('.mp4') || v.endsWith('.webm') || v.endsWith('.ogg') || v.endsWith('.mov') || v.endsWith('.m4v')) {
+                    sourceIsEmbed = false;
+                }
             }
         %>
 
@@ -312,10 +316,13 @@
             <div class="fb-media">
                 <% if (data.video) { %>
                     <% 
-                       var isEmbed = false;
+                       var isEmbed = true; // Default to embed
                        try {
-                           if (data.video && (data.video.includes('youtube') || data.video.includes('vimeo') || data.video.includes('player'))) {
-                               isEmbed = true;
+                           if (data.video) {
+                               const v = data.video.toLowerCase().split('?')[0];
+                               if (v.endsWith('.mp4') || v.endsWith('.webm') || v.endsWith('.ogg') || v.endsWith('.mov') || v.endsWith('.m4v')) {
+                                   isEmbed = false;
+                               }
                            }
                        } catch (e) {} 
                     %>
