@@ -1,15 +1,9 @@
 (function() {
     function initSpreadIt() {
-        console.log("🚀 Spread It Widget - Stable Corner Mode...");
+        // Hardcoded for maximum reliability across iframes/content-scripts
+        const BASE_URL = 'https://spread-it-enhanced.onrender.com'; 
         
-        // Configuration
-        const BASE_URL = (window.spreadItConfig && window.spreadItConfig.baseUrl) || 
-                         (document.currentScript ? document.currentScript.src.split('/js/widget.js')[0] : '');
-                         
-        if (!BASE_URL) {
-            console.error("Spread It: Could not determine Base URL");
-            return;
-        }
+        console.log(`🚀 Spread It Widget Active at ${window.location.href}`);
 
         // Styles
         const style = document.createElement('style');
@@ -65,7 +59,13 @@
         btn.className = 'spread-it-overlay-btn';
         
         const videoSrc = `${BASE_URL}/assets/logo-video-spread-it.mp4`;
-        btn.innerHTML = `<video src="${videoSrc}" autoplay loop muted playsinline class="spread-it-video-btn"></video>`;
+        // Fallback SVG if video fails or blocked
+        const fallbackIcon = `<svg viewBox="0 0 24 24" fill="white" style="width:24px;height:24px;"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.66 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>`;
+
+        btn.innerHTML = `
+            <video src="${videoSrc}" autoplay loop muted playsinline class="spread-it-video-btn" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'"></video>
+            <div style="display:none; width:100%; height:100%; align-items:center; justify-content:center;">${fallbackIcon}</div>
+        `;
         document.body.appendChild(btn);
 
         let activeElement = null;
