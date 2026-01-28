@@ -124,13 +124,50 @@
             let targetMedia = null;
 
             for (let el of elements) {
-                if (el.tagName === 'IMG' || el.tagName === 'VIDEO') {
-                    // Check sizing
-                    const width = el.tagName === 'VIDEO' ? el.videoWidth : el.naturalWidth || el.width;
-                    const height = el.tagName === 'VIDEO' ? el.videoHeight : el.naturalHeight || el.height;
-                    const offsetW = el.offsetWidth;
+                // Check for IMG, VIDEO, or IFRAME (Youtube/Vimeo)
+                if (el.tagName === 'IMG' || el.tagName === 'VIDEO' || el.tagName === 'IFRAME') {
                     
-                    if ((width > MIN_IMAGE_SIZE && height > MIN_IMAGE_SIZE) || (offsetW > MIN_IMAGE_SIZE)) {
+                    // Check sizing
+                    let width, height;
+                    if (el.tagName === 'VIDEO') {
+                        width = el.videoWidth;
+                        height = el.videoHeight;
+                    } else if (el.tagName === 'IMG') {
+                        width = el.naturalWidth || el.width;
+                        height = el.naturalHeight || el.height;
+                    } else {
+                        // IFRAME or generic
+                        width = el.offsetWidth;
+                        height = el.offsetHeight;
+                    }
+                    
+                    const offsetW = el.offsetWidth;
+                    const offsetH = el.offsetHeight;
+                    
+                    // Special Check for Iframes to ensure they are likely videos (YouTube/Vimeo)
+                    let isVideoFrame = false;
+                    if (el.tagName === 'IFRAME') {
+                        try {
+                           const src = el.src || '';
+                           if (src.includes('youtube') || src.includes('vimeo') || src.includes('player')) {
+                               isVideoFrame = true;
+                           }
+                        } catch(e) {}
+                        
+                        // If checking src failed or didn't match, maybe check class names?
+                        // For now strict check to avoid buttons on ads/widgets.
+                        if (!isVideoFrame && (width > 300 && height > 150)) {
+                             // Loose heuristic: Large iframes might be videos?
+                             // Be careful here.
+                             // isVideoFrame = true; // Uncomment if desperate
+                        }
+                    }
+
+                    // Combined Condition
+                    const isBigEnough = (width > MIN_IMAGE_SIZE && height > MIN_IMAGE_SIZE) || (offsetW > MIN_IMAGE_SIZE && offsetH > MIN_IMAGE_SIZE);
+                    const isValidType = (el.tagName !== 'IFRAME') || isVideoFrame;
+
+                    if (isBigEnough && isValidType) {
                          targetMedia = el;
                          break; // Found the top-most media
                     }
