@@ -123,65 +123,75 @@
             const elements = document.elementsFromPoint(e.clientX, e.clientY);
             let targetMedia = null;
 
-            for (let el of elements) {
-                // Check for IMG, VIDEO, or IFRAME (Youtube/Vimeo)
-                if (el.tagName === 'IMG' || el.tagName === 'VIDEO' || el.tagName === 'IFRAME') {
-                    
-                    // Check sizing
-                    let width, height;
-                    if (el.tagName === 'VIDEO') {
-                        width = el.videoWidth;
-                        height = el.videoHeight;
-                    } else if (el.tagName === 'IMG') {
-                        width = el.naturalWidth || el.width;
-                        height = el.naturalHeight || el.height;
-                    } else {
-                        // IFRAME or generic
-                        width = el.offsetWidth;
-                        height = el.offsetHeight;
-                    }
-                    
-                    const offsetW = el.offsetWidth;
-                    const offsetH = el.offsetHeight;
-                    
-                    // IFRAME Detection Logic (Broadened)
-                    let isVideoFrame = false;
-                    if (el.tagName === 'IFRAME') {
-                        try {
-                           const src = (el.src || '').toLowerCase();
-                           const title = (el.title || '').toLowerCase();
-                           const className = (typeof el.className === 'string' ? el.className : '').toLowerCase();
-                           
-                           // 1. Check Source URL for common video keywords
-                           if (src.includes('youtube') || src.includes('vimeo') || src.includes('player') || 
-                               src.includes('video') || src.includes('embed') || src.includes('dailymotion') || 
-                               src.includes('twitch') || src.includes('wistia')) {
-                               isVideoFrame = true;
-                           }
-                           
-                           // 2. Fallback: If it is LARGE, assume it is content (video) unless it looks like an ad
-                           if (!isVideoFrame && (offsetW > 250 && offsetH > 150)) {
-                               const isAd = src.includes('ad') || src.includes('banner') || src.includes('doubleclick') || 
-                                            src.includes('marketing') || title.includes('advertisement');
-                               
-                               if (!isAd) {
-                                   isVideoFrame = true;
-                               }
-                           }
-                        } catch(e) {
-                            // If access denied (cross-origin), but size is large, we might still want to try?
-                            // Often we can't read 'src' if cross-origin? No, src attribute is usually accessible on the element itself,
-                            // unless it was dynamically injected without attribute.
+            // Helper to validate a potential media element
+            function isValideMedia(el) {
+                if (!el) return false;
+                
+                let width, height;
+                if (el.tagName === 'VIDEO') {
+                    width = el.videoWidth || el.offsetWidth;
+                    height = el.videoHeight || el.offsetHeight;
+                } else if (el.tagName === 'IMG') {
+                    width = el.naturalWidth || el.width;
+                    height = el.naturalHeight || el.height;
+                } else if (el.tagName === 'IFRAME') {
+                    width = el.offsetWidth;
+                    height = el.offsetHeight;
+                } else {
+                    return false;
+                }
+
+                const offsetW = el.offsetWidth;
+                const offsetH = el.offsetHeight;
+
+                // Check IFRAME specifically
+                let isVideoFrame = false;
+                if (el.tagName === 'IFRAME') {
+                     try {
+                        const src = (el.src || '').toLowerCase();
+                        const title = (el.title || '').toLowerCase();
+                        
+                        if (src.includes('youtube') || src.includes('vimeo') || src.includes('player') || 
+                            src.includes('video') || src.includes('embed') || src.includes('dailymotion') || 
+                            src.includes('twitch') || src.includes('wistia')) {
+                            isVideoFrame = true;
                         }
-                    }
+                        
+                        // Fallback based on size (Broadest catch)
+                        if (!isVideoFrame && (offsetW > 200 && offsetH > 150)) {
+                             const isAd = src.includes('ad') || src.includes('banner') || src.includes('doubleclick') || 
+                                          title.includes('advertisement');
+                             if (!isAd) isVideoFrame = true;
+                        }
+                     } catch(err) {
+                         // Cross-origin access issue likely, default to size check validity if large
+                         if (offsetW > 200 && offsetH > 150) isVideoFrame = true;
+                     }
+                }
 
-                    // Combined Condition
-                    const isBigEnough = (width > MIN_IMAGE_SIZE && height > MIN_IMAGE_SIZE) || (offsetW > MIN_IMAGE_SIZE && offsetH > MIN_IMAGE_SIZE);
-                    const isValidType = (el.tagName !== 'IFRAME') || isVideoFrame;
+                const isBigEnough = (width > 150 && height > 150) || (offsetW > 150 && offsetH > 150);
+                const isValidType = (el.tagName !== 'IFRAME') || isVideoFrame;
 
-                    if (isBigEnough && isValidType) {
-                         targetMedia = el;
-                         break; // Found the top-most media
+                return isBigEnough && isValidType;
+            }
+
+            for (let el of elements) {
+                // 1. Check if the element ITSELF is media
+                if (isValideMedia(el)) {
+                    targetMedia = el;
+                    break;
+                }
+
+                // 2. Deep Scan: Check if the element WRAPS a media element that covers it
+                // e.g., a div overlay on top of a video
+                if (el.tagName === 'DIV' || el.tagName === 'A' || el.tagName === 'SECTION' || el.tagName === 'SPAN') {
+                    const childMedia = el.querySelector('video, iframe, img');
+                    if (isValideMedia(childMedia)) {
+                        // Ensure the child is actually visually under the cursor (mostly)
+                        // If the wrapper is huge and the video is tiny in the corner, this might be false positive if we just check containment.
+                        // But usually hover effects are tight wrappers.
+                        targetMedia = childMedia;
+                        break; 
                     }
                 }
             }
