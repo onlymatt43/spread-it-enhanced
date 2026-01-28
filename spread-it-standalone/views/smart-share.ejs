@@ -433,11 +433,18 @@ function enhanceText(platform) {
        action = 'generate_hashtags';
    }
 
+   // Use current textarea content as base for enhancement
+   const container = document.getElementById(platform + '-mockup');
+   const textarea = container.querySelector('textarea');
+   const currentText = textarea ? textarea.value : "";
+
    fetch('/api/create-post-ai', {
        method: 'POST',
        headers: {'Content-Type': 'application/json'},
        body: JSON.stringify({
-           content: "Context from image: <%= data.title %>",
+           content: currentText && currentText.trim().length > 0 
+                    ? currentText.trim() 
+                    : "Context from media: <%= data.title %>",
            options: { 
                platform: platform, 
                style: 'engaging',
@@ -447,10 +454,6 @@ function enhanceText(platform) {
            mediaType: "<%= data.video ? 'video' : 'image' %>"
        })
    }).then(res => res.json()).then(data => {
-       // Locate textarea in current mockup
-       const container = document.getElementById(platform + '-mockup');
-       const textarea = container.querySelector('textarea');
-       
        if (action === 'generate_hashtags') {
            // Append hashtags to existing text instead of replacing
            const currentValue = textarea.value;
@@ -463,8 +466,6 @@ function enhanceText(platform) {
    }).catch(e => {
        console.error(e);
        // Fallback simulation
-       const container = document.getElementById(platform + '-mockup');
-       const textarea = container.querySelector('textarea');
        if (platform === 'twitter') textarea.value += " #Trending #SpreadIt";
        else if (platform === 'instagram') textarea.value += "\n.\n.\n#InstaGood #DailyInspo";
        else textarea.value += " [Enhanced by AI]";
