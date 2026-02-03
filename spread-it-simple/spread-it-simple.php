@@ -150,7 +150,8 @@ function spread_it_admin_page() {
                     <tr>
                         <th><label for="openai_key">Clé API OpenAI</label></th>
                         <td>
-                            <input type="password" id="openai_key" name="openai_key" value="<?php echo esc_attr($openai_key); ?>" class="regular-text" />
+                            <input type="password" id="openai_key" name="openai_key" placeholder="<?php echo !empty($openai_key) ? '••••••••••••••••' : 'sk-...'; ?>" class="regular-text" />
+                            <?php if (!empty($openai_key)): ?><p class="description" style="color:green;">✓ Clé configurée</p><?php endif; ?>
                             <p class="description">Obtenez votre clé sur <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI</a></p>
                         </td>
                     </tr>

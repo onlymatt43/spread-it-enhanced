@@ -302,6 +302,54 @@ app.get('/health/env', (req, res) => {
   res.json({ ok: issues.length === 0, issues });
 });
 
+// Lightweight credentials connectivity checks (read-only)
+async function checkFacebookCreds() {
+  const pageId = process.env.FACEBOOK_PAGE_ID;
+  const token = process.env.FACEBOOK_ACCESS_TOKEN;
+  if (!pageId || !token) return { ok: false, issue: 'Missing FACEBOOK_PAGE_ID or FACEBOOK_ACCESS_TOKEN' };
+  try {
+    const url = `https://graph.facebook.com/v19.0/${pageId}?fields=name,id&access_token=${encodeURIComponent(token)}`;
+    const { data } = await axios.get(url, { timeout: 8000 });
+    return { ok: true, data: { id: data.id, name: data.name } };
+  } catch (e) {
+    const payload = e.response?.data || { message: e.message };
+    // Normalize common errors
+    let issue = 'Facebook token/page inaccessible';
+    if (payload?.error?.error_subcode === 492) issue = 'Token user lacks required page role or 2FA';
+    else if (payload?.error?.code === 190) issue = 'Invalid or expired Facebook token';
+    return { ok: false, issue, details: payload };
+  }
+}
+
+async function checkInstagramCreds() {
+  const igBizId = process.env.INSTAGRAM_BUSINESS_ID;
+  const token = process.env.INSTAGRAM_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN;
+  if (!igBizId || !token) return { ok: false, issue: 'Missing INSTAGRAM_BUSINESS_ID or Token' };
+  try {
+    const url = `https://graph.facebook.com/v19.0/${igBizId}?fields=username,id&access_token=${encodeURIComponent(token)}`;
+    const { data } = await axios.get(url, { timeout: 8000 });
+    return { ok: true, data: { id: data.id, username: data.username } };
+  } catch (e) {
+    const payload = e.response?.data || { message: e.message };
+    let issue = 'Instagram token/business inaccessible';
+    if (payload?.error?.code === 190) issue = 'Invalid or expired Instagram token';
+    return { ok: false, issue, details: payload };
+  }
+}
+
+app.get('/health/credentials', async (req, res) => {
+  const platform = (req.query.platform || '').toLowerCase();
+  try {
+    if (platform === 'facebook') return res.json({ platform: 'facebook', ...(await checkFacebookCreds()) });
+    if (platform === 'instagram') return res.json({ platform: 'instagram', ...(await checkInstagramCreds()) });
+    const fb = await checkFacebookCreds();
+    const ig = await checkInstagramCreds();
+    res.json({ ok: fb.ok && ig.ok, facebook: fb, instagram: ig });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

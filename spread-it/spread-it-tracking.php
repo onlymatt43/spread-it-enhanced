@@ -250,7 +250,10 @@ class Spread_It_Tracking {
                     </tr>
                     <tr>
                         <th><label for="fb_access_token">Access Token</label></th>
-                        <td><input type="password" id="fb_access_token" name="<?php echo esc_attr(self::OPT_KEY); ?>[fb_access_token]" class="regular-text" value="<?php echo esc_attr($opt['fb_access_token'] ?? ''); ?>"></td>
+                        <td>
+                            <input type="password" id="fb_access_token" name="<?php echo esc_attr(self::OPT_KEY); ?>[fb_access_token]" class="regular-text" placeholder="<?php echo !empty($opt['fb_access_token']) ? '••••••••••••••••' : 'Enter token'; ?>">
+                            <?php if (!empty($opt['fb_access_token'])): ?><p class="description" style="color:green;">✓ Token configuré</p><?php endif; ?>
+                        </td>
                     </tr>
 
                     <tr><th colspan="2"><h2>Instagram (Business)</h2></th></tr>
@@ -260,7 +263,10 @@ class Spread_It_Tracking {
                     </tr>
                     <tr>
                         <th><label for="ig_access_token">Access Token</label></th>
-                        <td><input type="password" id="ig_access_token" name="<?php echo esc_attr(self::OPT_KEY); ?>[ig_access_token]" class="regular-text" value="<?php echo esc_attr($opt['ig_access_token'] ?? ''); ?>"></td>
+                        <td>
+                            <input type="password" id="ig_access_token" name="<?php echo esc_attr(self::OPT_KEY); ?>[ig_access_token]" class="regular-text" placeholder="<?php echo !empty($opt['ig_access_token']) ? '••••••••••••••••' : 'Enter token'; ?>">
+                            <?php if (!empty($opt['ig_access_token'])): ?><p class="description" style="color:green;">✓ Token configuré</p><?php endif; ?>
+                        </td>
                     </tr>
 
                     <tr><th colspan="2"><h2>X (Twitter) API v2</h2></th></tr>
@@ -270,7 +276,10 @@ class Spread_It_Tracking {
                     </tr>
                     <tr>
                         <th><label for="x_bearer">Bearer Token</label></th>
-                        <td><input type="password" id="x_bearer" name="<?php echo esc_attr(self::OPT_KEY); ?>[x_bearer]" class="regular-text" value="<?php echo esc_attr($opt['x_bearer'] ?? ''); ?>"></td>
+                        <td>
+                            <input type="password" id="x_bearer" name="<?php echo esc_attr(self::OPT_KEY); ?>[x_bearer]" class="regular-text" placeholder="<?php echo !empty($opt['x_bearer']) ? '••••••••••••••••' : 'Enter token'; ?>">
+                            <?php if (!empty($opt['x_bearer'])): ?><p class="description" style="color:green;">✓ Token configuré</p><?php endif; ?>
+                        </td>
                     </tr>
                 </table>
                 <?php submit_button(); ?>

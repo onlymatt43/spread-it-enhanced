@@ -631,6 +631,17 @@ document.addEventListener('DOMContentLoaded', () => {
     envAlert.style.display = 'none';
     envAlert.className = 'alert alert-warning env-alert';
     host.prepend(envAlert);
+    // Insert credentials status badges
+    const credStatus = document.createElement('div');
+    credStatus.id = 'cred-status';
+    credStatus.style.display = 'none';
+    credStatus.className = 'alert alert-info';
+    credStatus.innerHTML = `
+        <strong>Credentials:</strong>
+        <span id="fbStatus" class="badge bg-secondary ms-2">Facebook: checking…</span>
+        <span id="igStatus" class="badge bg-secondary ms-2">Instagram: checking…</span>
+    `;
+    host.prepend(credStatus);
     const composer = document.createElement('div');
     composer.className = 'composer-wrapper';
     composer.style.position = 'sticky';
@@ -688,6 +699,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     const closeBtn = alertNode.querySelector('.btn-close');
                     if (closeBtn) closeBtn.addEventListener('click', () => alertNode.remove());
                 }
+            })
+            .catch(() => {});
+
+        // Fetch credentials health and show badges
+        fetch('/health/credentials')
+            .then(r => r.json())
+            .then((data) => {
+                const fb = data.facebook || data;
+                const ig = data.instagram || data;
+                const fbEl = document.getElementById('fbStatus');
+                const igEl = document.getElementById('igStatus');
+                if (fbEl && fb) {
+                    fbEl.textContent = 'Facebook: ' + (fb.ok ? 'ok' : (fb.issue || 'issue'));
+                    fbEl.className = 'badge ms-2 ' + (fb.ok ? 'bg-success' : 'bg-danger');
+                }
+                if (igEl && ig) {
+                    igEl.textContent = 'Instagram: ' + (ig.ok ? 'ok' : (ig.issue || 'issue'));
+                    igEl.className = 'badge ms-2 ' + (ig.ok ? 'bg-success' : 'bg-danger');
+                }
+                document.getElementById('cred-status').style.display = 'block';
             })
             .catch(() => {});
 });

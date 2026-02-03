@@ -96,7 +96,10 @@ class Spread_It_Plugin {
             <table class="form-table" role="presentation">
               <tr>
                 <th><label for="openai_api_key">OpenAI API Key</label></th>
-                <td><input type="password" id="openai_api_key" name="<?php echo esc_attr(self::OPT_KEY); ?>[openai_api_key]" class="regular-text" value="<?php echo esc_attr($opt['openai_api_key'] ?? ''); ?>" placeholder="sk-..." /></td>
+                <td>
+                  <input type="password" id="openai_api_key" name="<?php echo esc_attr(self::OPT_KEY); ?>[openai_api_key]" class="regular-text" placeholder="<?php echo !empty($opt['openai_api_key']) ? '••••••••••••••••' : 'sk-...'; ?>" />
+                  <?php if (!empty($opt['openai_api_key'])): ?><p class="description" style="color:green;">✓ API Key configurée</p><?php endif; ?>
+                </td>
               </tr>
               <tr>
                 <th><label for="openai_model">OpenAI Model</label></th>
