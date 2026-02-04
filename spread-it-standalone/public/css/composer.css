@@ -42,6 +42,7 @@ body.composer-dark{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Robo
 .ai-messages .msg{margin-bottom:10px;padding:10px 12px;border-radius:12px;max-width:78%}
 .ai-messages .msg.user{background:rgba(0,150,255,0.12);align-self:flex-end}
 .ai-messages .msg.ai{background:rgba(255,255,255,0.04);align-self:flex-start}
+.ai-messages .msg.system{align-self: center; background:rgba(0,255,150,0.08); color:#aaffaa; font-size:0.9em; border:1px dashed rgba(0,255,150,0.2); width:90%}
 .ai-messages .msg.ai.typing{opacity:0.9;font-style:italic}
 .ai-form{display:flex;padding:12px;border-top:1px solid rgba(255,255,255,0.02)}
 .ai-form input{flex:1;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:#eaf2ff;margin-right:8px}
