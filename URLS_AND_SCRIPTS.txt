@@ -1,0 +1,28 @@
+# SPREAD IT — URLs & Integration Resources
+
+## 🌐 Application Links
+- **Application URL**: https://spread-it-enhanced.onrender.com
+- **Composer Tool**: https://spread-it-enhanced.onrender.com/composer
+
+## 🔌 Integration Widget
+To add the "Spread It" button to your external websites (Vercel, WordPress, Custom), use this code snippet.
+It automatically finds videos on the page and adds the floating button.
+
+```html
+<!-- Spread It Integration -->
+<script>
+  window.SpreadIt = { 
+    composerBase: 'https://spread-it-enhanced.onrender.com' 
+  };
+</script>
+<script src="https://spread-it-enhanced.onrender.com/embed/spreadit-embed.js" async defer></script>
+```
+
+## 🔐 Social Connections
+Use these links to authorize the application to post on your behalf:
+- **LinkedIn**: https://spread-it-enhanced.onrender.com/auth/linkedin/login
+- **Others**: (Configured via Dashboard or API keys directly in Composer)
+
+## 🛠 Direct Script Access
+- **Embed Script (Source)**: https://spread-it-enhanced.onrender.com/embed/spreadit-embed.js
+- **Verified Asset (Logo)**: https://spread-it-enhanced.onrender.com/assets/logo-video-spread-it.mp4
