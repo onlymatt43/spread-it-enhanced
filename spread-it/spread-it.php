@@ -40,6 +40,8 @@ class Spread_It_Plugin {
         add_shortcode('spread-it-social', [$this,'shortcode_social']);
 
         add_action('wp_enqueue_scripts',  [$this,'enqueue_assets']);
+        // Render composer on front page (open via button/modal)
+        add_action('wp_footer',  [$this,'maybe_render_frontpage_composer']);
 
         /* Cron handler */
         add_action(self::EVENT_AI_JOB, [$this,'run_ai_job'], 10, 1);
@@ -61,6 +63,7 @@ class Spread_It_Plugin {
                 return [
                     'openai_api_key' => isset($in['openai_api_key']) ? trim($in['openai_api_key']) : '',
                     'openai_model'   => isset($in['openai_model']) ? sanitize_text_field($in['openai_model']) : 'gpt-4o-mini',
+                'composer_base_url' => isset($in['composer_base_url']) ? trim($in['composer_base_url']) : '',
                     'auto_apply'     => empty($in['auto_apply']) ? 0 : 1,
                     'tone'           => sanitize_text_field($in['tone'] ?? 'sexy-bold-confident'),
                     'language_mode'  => sanitize_text_field($in['language_mode'] ?? 'en_fr_mix'),
@@ -74,6 +77,8 @@ class Spread_It_Plugin {
             'default'=>[
                 'openai_api_key' => '',
                 'openai_model'   => 'gpt-4o-mini',
+                // Default composer host (Vercel) so front-page composer uses hosted assets by default
+                'composer_base_url' => 'https://chaud-devant.vercel.app',
                 'auto_apply'     => 0,
                 'tone'           => 'sexy-bold-confident',
                 'language_mode'  => 'en_fr_mix',
@@ -188,6 +193,14 @@ class Spread_It_Plugin {
             'ajax'  => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('spreadit'),
         ]);
+        // Video overlay script: inject mini Spread It buttons on video elements
+        wp_register_script('spread-it-video', false, [], null, true);
+        wp_enqueue_script('spread-it-video');
+        $video_js = @file_get_contents(__DIR__ . '/public/js/video-overlay.js') ?: '';
+        // Provide composer_base to the client script
+        $composer_base = esc_url_raw(trim((get_option(self::OPT_KEY, [])['composer_base_url'] ?? '')));
+        $init = "window.SpreadIt = window.SpreadIt || {}; window.SpreadIt.composerBase = '".esc_js($composer_base)."';";
+        wp_add_inline_script('spread-it-video', $init . "\n" . $video_js);
         $trackJS = <<<JS
 (function(){
   function ping(net,pid){
@@ -208,6 +221,108 @@ JS;
         // Player vidéo WP (pour <video> généré)
         wp_enqueue_style('wp-mediaelement');
         wp_enqueue_script('wp-mediaelement');
+    }
+
+    /* ================ FRONT PAGE COMPOSER ================ */
+    public function maybe_render_frontpage_composer(){
+        if (is_admin()) return;
+        // Render on front page or posts index (some WP sites use the blog index as the homepage)
+        if (!is_front_page() && !is_home()) return;
+
+      // Allow hosting composer assets externally (Vercel). Configure via plugin option 'composer_base_url'.
+      $opt = get_option(self::OPT_KEY, []);
+      $composer_base = trim($opt['composer_base_url'] ?? '');
+      ob_start();
+      // If configured, reference external CSS; otherwise inline local CSS as fallback.
+      if ($composer_base) {
+        $composer_base = rtrim($composer_base, '/');
+        // Check remotely if composer.css exists (avoid injecting 404 links)
+        $head = wp_remote_head($composer_base . '/css/composer.css', ['timeout'=>3]);
+        $code = is_array($head) ? wp_remote_retrieve_response_code($head) : 0;
+        if ($code >= 200 && $code < 400) {
+          echo '<link rel="stylesheet" href="' . esc_url($composer_base . '/css/composer.css') . '">';
+        } else {
+          // remote asset missing -> fallback to local inline
+          $composer_base = ''; // clear to indicate fallback
+          echo '<style>' . (@file_get_contents(__DIR__ . '/../spread-it-standalone/public/css/composer.css') ?: '') . '</style>';
+        }
+      } else {
+        echo '<style>' . (@file_get_contents(__DIR__ . '/../spread-it-standalone/public/css/composer.css') ?: '') . '</style>';
+      }
+      ?>
+
+      <div id="spreaditComposerWrapper" class="composer-dark" style="display:none;position:fixed;inset:0;z-index:9999">
+        <div class="composer-backdrop"></div>
+
+        <header class="composer-topbar">
+          <div class="brand">Spread It — Composer</div>
+          <div class="top-actions">
+            <button id="toggleChat" class="btn-small">Chat AI</button>
+            <a href="/create" class="btn-small muted">Ancien UI</a>
+          </div>
+        </header>
+
+        <main class="composer-stage">
+          <div class="cards-stack" id="cardsStack">
+            <div class="post-card underside card-4"></div>
+            <div class="post-card underside card-3"></div>
+            <div class="post-card underside card-2"></div>
+            <div class="post-card top-card card-1" id="activeCard">
+              <div class="card-header">
+                <div class="platforms">
+                  <span class="badge p facebook">Facebook</span>
+                  <span class="badge p twitter">Twitter</span>
+                  <span class="badge p instagram">Instagram</span>
+                  <span class="badge p linkedin">LinkedIn</span>
+                </div>
+                <div class="card-actions">
+                  <button id="aiPolish" class="btn-accent">Améliorer (respecter le contenu)</button>
+                  <button id="switchToChat" class="btn-ghost">Écrire en chat</button>
+                </div>
+              </div>
+
+              <div class="card-body">
+                <div id="postEditor" class="editor" contenteditable="true" data-placeholder="Écrivez votre post ici — l'IA corrigera la grammaire et respectera votre contenu."></div>
+              </div>
+
+              <div class="card-footer">
+                <div class="meta-left">Draft • <span id="charCount">0</span> caractères</div>
+                <div class="meta-right">
+                  <button id="previewBtn" class="btn-outline">Aperçu</button>
+                  <button id="publishBtn" class="btn-primary">Publier</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <aside class="ai-chat" id="aiChat">
+          <div class="ai-header">
+            <strong>Assistant AI</strong>
+            <button id="closeChat" class="close">✕</button>
+          </div>
+          <div class="ai-messages" id="aiMessages" aria-live="polite"></div>
+          <form id="aiForm" class="ai-form">
+            <input type="text" id="aiInput" placeholder="Demandez: 'Crée un thread inspirant sur IA'" autocomplete="off">
+            <button type="submit" class="btn-send">Envoyer</button>
+          </form>
+        </aside>
+
+        <button class="spreadit-open-btn" id="spreaditFloatingOpen" style="position:fixed;right:1rem;bottom:1rem;padding:.75rem 1rem;border-radius:999px;background:#ff5a5f;color:#fff;z-index:10000;box-shadow:0 6px 18px rgba(0,0,0,.2);border:0;cursor:pointer">Spread It</button>
+        <button aria-label="Close" id="spreaditClose" style="position:fixed;right:1rem;bottom:4.5rem;padding:.5rem;border-radius:8px;background:transparent;color:inherit;z-index:10000;border:0;cursor:pointer;font-weight:600">✕</button>
+
+      <?php
+      // Load composer JS externally if configured, otherwise inline the local file.
+      if ($composer_base) {
+        echo '<script src="' . esc_url($composer_base . '/js/composer.js') . '"></script>';
+        // small helper to control show/hide (external script handles UI internals)
+        echo "<script>(function(){var wrapper=document.getElementById('spreaditComposerWrapper');var openBtn=document.getElementById('spreaditFloatingOpen');var closeBtn=document.getElementById('spreaditClose');function open(){if(wrapper){wrapper.style.display='block';document.body.style.overflow='hidden';}}function close(){if(wrapper){wrapper.style.display='none';document.body.style.overflow='';}}openBtn&&openBtn.addEventListener('click',open);closeBtn&&closeBtn.addEventListener('click',close);window.SpreadIt=window.SpreadIt||{};window.SpreadIt.showComposer=open;window.SpreadIt.hideComposer=close;})();</script>";
+      } else {
+        echo '<script>' . (@file_get_contents(__DIR__ . '/../spread-it-standalone/public/js/composer.js') ?: '') . '</script>';
+        echo "<script>(function(){var wrapper=document.getElementById('spreaditComposerWrapper');var openBtn=document.getElementById('spreaditFloatingOpen');var closeBtn=document.getElementById('spreaditClose');function open(){if(wrapper){wrapper.style.display='block';document.body.style.overflow='hidden';}}function close(){if(wrapper){wrapper.style.display='none';document.body.style.overflow='';}}openBtn&&openBtn.addEventListener('click',open);closeBtn&&closeBtn.addEventListener('click',close);window.SpreadIt=window.SpreadIt||{};window.SpreadIt.showComposer=open;window.SpreadIt.hideComposer=close;})();</script>";
+      }
+
+      echo ob_get_clean();
     }
 
     /* ================= OG / TWITTER CARDS ================= */
