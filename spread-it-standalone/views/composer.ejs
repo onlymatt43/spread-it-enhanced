@@ -209,14 +209,25 @@
                     const copyBtn = card.querySelector('.action-copy');
 
                     if (!isConfigured) {
-                        // ... (Auth Logic) ...
-                        card.classList.add('locked');
-                        previewEl.innerText = "Connexion requise pour voir le contenu optimisé.";
-                        previewEl.style.opacity = "0.5";
+                        // NOT AUTHENTICATED -> DARK CARD
+                        card.classList.add('locked'); // Add visual style for locked
+                        
+                        // EMPTY ALL VISUALS
+                        previewEl.innerText = "";
+                        previewEl.style.display = "none";
+                        
+                        // Hide potential media blocks
+                        const fullMedia = card.querySelector('.sp-full-media');
+                        if(fullMedia) fullMedia.style.display = "none";
+                        const mediaBlock = card.querySelector('.sp-media-block');
+                        if(mediaBlock) mediaBlock.style.display = "none";
+                        
                         copyBtn.innerText = "Se connecter";
                         copyBtn.classList.add('accent');
                         copyBtn.onclick = () => window.open(`/auth/${platform}/login`, '_blank');
                     } else if (content) {
+                        // AUTHENTICATED & HAS CONTENT
+                        previewEl.style.display = "block"; // Restore
                         previewEl.innerText = content;
                         
                         // DISPLAY LOGIC: Video or Image + BRANDING
@@ -231,6 +242,7 @@
                             // Case 1: Full Background (Insta/TikTok)
                             const fullMedia = card.querySelector('.sp-full-media');
                             if(fullMedia) {
+                                fullMedia.style.display = "block"; // Restore
                                 fullMedia.style.backgroundImage = `url('${posterUrl}')`;
                                 // Add Branding
                                 if(!fullMedia.querySelector('.sp-branding-mark')) fullMedia.insertAdjacentHTML('beforeend', brandingHtml);
@@ -239,6 +251,7 @@
                             // Case 2: Feed Block (FB/Twitter/LI)
                             const mediaBlock = card.querySelector('.sp-media-block');
                             if(mediaBlock) {
+                                mediaBlock.style.display = "block"; // Restore
                                 mediaBlock.style.backgroundImage = `url('${posterUrl}')`;
                                 mediaBlock.style.display = 'block';
                                 // Add play icon if video
