@@ -137,12 +137,39 @@
   document.getElementById('publishBtn').addEventListener('click', async ()=>{
     const content = (editor.textContent||'').trim(); if(!content) { alert('Le post est vide'); return; }
     try{
+      // Gather selected platforms from per-platform cards
+      const selected = Array.from(document.querySelectorAll('.platform-select:checked')).map(n=>n.value);
+      if (selected.length === 0) {
+        if (!confirm('Aucun réseau sélectionné. Continuer et créer un draft seulement ?')) return;
+      }
+
+      // First, create the content on server (stores session.currentContent)
       const form = new FormData(); form.append('content', content);
       const res = await fetch('/create', {method:'POST', body: form});
       const json = await res.json();
-      if(json && json.success){ alert('Contenu préparé. Aller à partager.'); window.location.href='/share'; }
-      else alert('Erreur publication: ' + (json && json.error ? json.error : 'inconnue'));
-    }catch(e){ alert('Erreur réseau lors de la publication'); }
+      if(!(json && json.success)){
+        alert('Erreur publication: ' + (json && json.error ? json.error : 'inconnue'));
+        return;
+      }
+
+      // Then request immediate sharing to selected platforms
+      if (selected.length > 0) {
+        const shareRes = await fetch('/share', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ platforms: selected, schedule: 'now' })
+        });
+        const shareJson = await shareRes.json();
+        if (shareJson && shareJson.success) {
+          alert('Post partagé sur: ' + selected.join(', '));
+        } else {
+          alert('Erreur lors du partage: ' + (shareJson && shareJson.error ? shareJson.error : 'inconnue'));
+        }
+      } else {
+        alert('Contenu préparé. Aller à partager.'); window.location.href='/share';
+      }
+
+    }catch(e){ console.error(e); alert('Erreur réseau lors de la publication'); }
   });
 
     // Prefill from query params (embed usage)
