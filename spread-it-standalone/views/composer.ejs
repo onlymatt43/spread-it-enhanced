@@ -52,30 +52,90 @@
     </div>
   </main>
 
-  <!-- Platform cards: one card per social network for preview & per-platform caption -->
+  <!-- Platform cards: Real-time visual previews -->
   <section class="platform-cards" id="platformCards">
     <% const platforms = ['facebook','instagram','twitter','linkedin','tiktok']; %>
     <% platforms.forEach(function(p){ %>
-      <article class="platform-card" data-platform="<%= p %>">
-        <header class="platform-card-header">
-          <strong><%= p.charAt(0).toUpperCase()+p.slice(1) %></strong>
-          <div class="platform-actions">
-            <% if (typeof configured !== 'undefined' && !configured[p]) { %>
-                <% if (p === 'linkedin') { %>
-                    <a href="/auth/linkedin/login" target="_blank" class="btn-small">Connecter</a>
-                <% } else { %>
-                    <span class="badge-warning" title="Missing credentials in Env">Non connecté</span>
+      <article class="platform-wrapper" data-platform="<%= p %>">
+        
+        <!-- Toolbar: Functional Controls -->
+        <div class="platform-toolbar">
+            <div class="left">
+                <label class="toggle-platform"><input type="checkbox" class="platform-select" value="<%= p %>" checked> <span class="p-name"><%= p.charAt(0).toUpperCase()+p.slice(1) %></span></label>
+                <% if (typeof configured !== 'undefined' && !configured[p]) { %>
+                    <% if (p === 'linkedin') { %>
+                        <a href="/auth/linkedin/login" target="_blank" class="status-link disconnected" title="Connecter le compte">🔗 Connecter</a>
+                    <% } else { %>
+                        <span class="status-badge error" title="Missing credentials">⚠ Connecter</span>
+                    <% } %>
                 <% } %>
-            <% } %>
-            <label><input type="checkbox" class="platform-select" value="<%= p %>" checked> Publier</label>
-            <button class="btn-small improve-card">Améliorer</button>
-          </div>
-        </header>
-        <div class="platform-card-media" data-platform="<%= p %>"></div>
-        <div class="platform-card-body">
-          <textarea class="platform-caption" data-platform="<%= p %>" placeholder="Légende pour <%= p %>"></textarea>
-          <div class="platform-hashtags" data-platform="<%= p %>"></div>
+            </div>
+            <div class="right">
+                <button class="btn-xs ghost improve-card">✨ IA Polish</button>
+            </div>
         </div>
+
+        <!-- Visual Preview: Mimics the social network UI -->
+        <div class="social-preview theme-dark p-<%= p %>">
+            <% if(p !== 'tiktok') { %>
+            <div class="sp-header">
+                <div class="sp-avatar"><img src="https://ui-avatars.com/api/?name=User&background=random" alt=""></div>
+                <div class="sp-meta">
+                    <div class="sp-name">
+                        Mathieu Courchesne 
+                        <% if(p==='twitter'||p==='instagram'||p==='facebook'||p==='linkedin'){ %> <span class="verified-badge">✔</span> <% } %>
+                    </div>
+                    <div class="sp-sub">
+                        <% if(p==='twitter'){ %> @mathieuc • 1m <% } %>
+                        <% if(p==='facebook'){ %> 1 min • <span class="globe-icon">🌎</span> <% } %>
+                        <% if(p==='linkedin'){ %> Founder @ Spread It • 1m • 🌐 <% } %>
+                        <% if(p==='instagram'){ %> Sponsored <% } %>
+                    </div>
+                </div>
+                <div class="sp-menu">•••</div>
+            </div>
+            <% } %>
+
+            <div class="sp-body">
+                <!-- Text Area (Acting as Post Content) -->
+                <!-- Order is controlled by CSS per platform (Insta: Media first) -->
+                <div class="sp-text-content">
+                    <textarea class="platform-caption inputs-invisible" data-platform="<%= p %>" placeholder="Votre texte <%= p %>..."></textarea>
+                    <div class="platform-hashtags" data-platform="<%= p %>"></div>
+                </div>
+                
+                <!-- Media Area -->
+                <div class="sp-media platform-card-media" data-platform="<%= p %>">
+                    <!-- Media injected by JS -->
+                </div>
+
+                <% if(p === 'tiktok') { %>
+                    <!-- TikTok Overlay UI -->
+                    <div class="tiktok-overlay">
+                        <div class="tiktok-side">
+                           <div class="tt-icon">♥</div>
+                           <div class="tt-icon">💬</div>
+                           <div class="tt-icon">↪</div>
+                        </div>
+                        <div class="tiktok-bottom">
+                           <div class="tk-name">@mathieu</div>
+                           <div class="tk-desc">Caption goes here... #fyp</div>
+                           <div class="tk-sound">♫ Original Sound</div>
+                        </div>
+                    </div>
+                <% } %>
+            </div>
+
+            <% if(p !== 'tiktok') { %>
+            <div class="sp-footer">
+                <% if(p==='twitter'){ %> <span class="act">💬 2</span> <span class="act">?? 5</span> <span class="act">♥ 12</span> <span class="act">ll 300</span> <% } %>
+                <% if(p==='facebook'){ %> <div class="fb-acts"><span class="act">👍 J'aime</span> <span class="act">💬 Commenter</span> <span class="act">↪ Partager</span></div> <% } %>
+                <% if(p==='linkedin'){ %> <div class="ln-acts"><span class="act">👍 J'aime</span> <span class="act">💬 Commenter</span> <span class="act">♻ Republier</span> <span class="act">Envoyer</span></div> <% } %>
+                <% if(p==='instagram'){ %> <div class="ig-acts"><span class="act">♥</span> <span class="act">💬</span> <span class="act">✈</span> <span class="spacer"></span> <span class="act">🔖</span></div> <div class="ig-likes">1,234 J'aime</div> <% } %>
+            </div>
+            <% } %>
+        </div>
+
       </article>
     <% }); %>
   </section>
