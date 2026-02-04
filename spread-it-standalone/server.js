@@ -18,6 +18,7 @@ const FormData = require('form-data'); // Ajout pour Facebook Upload
 // Nouveaux Services d'Intelligence
 const Strategist = require('./services/strategist');
 const VideoAI = require('./services/video-ai');
+const googleTrends = require('google-trends-api');
 
 // Configure layout if using ejs-layouts
 // const expressLayouts = require('express-ejs-layouts');
