@@ -106,14 +106,28 @@
         const params = new URLSearchParams(window.location.search);
         const prefill = params.get('prefill');
         const videoUrl = params.get('video_url');
+        const posterUrl = params.get('poster');
         const title = params.get('title');
+        const description = params.get('description');
         
+        // Store poster globally for previews
+        if(posterUrl) window.CURRENT_POSTER = posterUrl;
+
         if(prefill && videoUrl) {
-            // Show a "System" message indicating detection
-            addMessage('ai', `🎥 Média détecté : <strong>${title || 'Vidéo'}</strong><br>Je prépare une stratégie de diffusion...`);
+            // Show a "System" message indicating detection with THUMBNAIL if available
+            let visualHtml = `🎥 Média détecté : <strong>${title || 'Vidéo'}</strong>`;
+            if(posterUrl) {
+                visualHtml += `<br><img src="${posterUrl}" style="max-width:100px; border-radius:8px; margin-top:8px; display:block;" alt="Thumbnail">`;
+            }
+            visualHtml += `<br><span style="font-size:0.9em; opacity:0.8">Je prépare une stratégie de diffusion...</span>`;
             
-            // Auto-trigger generation
-            const prompt = `Je veux partager cette vidéo : "${title || 'Nouvelle vidéo'}" (Lien: ${videoUrl}). Génère des posts engageants pour mes réseaux en utilisant la technique du Newsjacking.`;
+            addMessage('ai', visualHtml);
+            
+            // Auto-trigger generation with richer context
+            let prompt = `Je veux partager cette vidéo : "${title || 'Nouvelle vidéo'}".\nLien: ${videoUrl}\n`;
+            if(description) prompt += `Contexte/Description: "${description}"\n`;
+            prompt += `Génère des posts engageants pour mes réseaux en utilisant la technique du Newsjacking. Utilise l'image fournie comme visuel si nécessaire.`;
+            
             handleSend(prompt);
         }
         
@@ -128,16 +142,14 @@
         
         if(!txt) return;
 
-        // User Message (Skip visual for forcedText if we want, or show it)
-        // For auto-send, we show it to confirm intent
+        // User Message
         if (!forcedText) {
             addMessage('user', txt);
             input.value = '';
             input.style.height = 'auto';
         } else {
-             // For system triggered, maybe just log "Demande de génération pour le média..." 
-             // or add a user bubble representing the context
-             addMessage('user', `🚀 Génère les posts pour : ${txt.split('(')[0]}`);
+             // For auto-trigger, we don't necessarily need to echo the huge prompt back
+             // just a small confirmation or nothing if the system msg covers it
         }
 
         // AI Loading State
@@ -189,7 +201,17 @@
                     } else if (content) {
                         // AUTHENTICATED & HAS CONTENT
                         previewEl.innerText = content;
-                        // Add hashtags highlight if needed
+                        
+                        // Apply Image Background from Metadata if available
+                         if(window.CURRENT_POSTER) {
+                            const bodyEl = card.querySelector('.sp-body');
+                            if(bodyEl) {
+                                bodyEl.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.7)), url('${window.CURRENT_POSTER}')`;
+                                bodyEl.style.backgroundSize = 'cover';
+                                bodyEl.style.backgroundPosition = 'center';
+                                previewEl.style.textShadow = '0 1px 3px rgba(0,0,0,0.8)';
+                            }
+                        }
                     } else {
                         // NO CONTENT GENERATED
                         previewEl.innerText = "Pas de contenu généré pour ce réseau.";
