@@ -861,10 +861,7 @@ app.get('/', (req, res) => {
 });
 
 app.get('/create', (req, res) => {
-  res.render('create', {
-    title: 'Créer du Contenu',
-    user: req.session.user
-  });
+  res.redirect('/composer');
 });
 
 // New composer UI (Standalone) - stack cards + AI chat popup
