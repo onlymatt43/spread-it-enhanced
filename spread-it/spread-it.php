@@ -77,8 +77,8 @@ class Spread_It_Plugin {
             'default'=>[
                 'openai_api_key' => '',
                 'openai_model'   => 'gpt-4o-mini',
-                // Default composer host (Vercel) so front-page composer uses hosted assets by default
-                'composer_base_url' => 'https://chaud-devant.vercel.app',
+                // Default composer host (Render) so front-page composer uses hosted assets by default
+                'composer_base_url' => 'https://spread-it-enhanced.onrender.com',
                 'auto_apply'     => 0,
                 'tone'           => 'sexy-bold-confident',
                 'language_mode'  => 'en_fr_mix',
