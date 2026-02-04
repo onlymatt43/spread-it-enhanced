@@ -996,18 +996,37 @@ app.post('/api/chat', express.json(), async (req, res) => {
         if (media && media.type === 'video') {
             console.log(`🔍 Analyzing video safety: ${media.url}`);
             
-            // Simulation du "Google View Test" (Video Intelligence)
-            // Dans un env de prod, on appellerait ici: const analysis = await VideoAI.analyzeVideo(media.url);
-            // Pour l'instant on simule un succès.
-            const isSafe = true; 
+            let isSafe = false;
+            let failureReason = "Service non configuré";
+
+            try {
+                 // APPEL RÉEL (Plus de simulation forcée)
+                 const analysis = await VideoAI.analyzeVideo(media.url);
+                 
+                 // Si c'est une simulation (pas de clé API), on considère que le test a ÉCHOUÉ (selon demande utilisateur)
+                 if (analysis.is_simulation) {
+                     isSafe = false;
+                     failureReason = "Google Video AI non configuré (Clés manquantes).";
+                 } else {
+                     // Vraie analyse
+                     isSafe = (analysis.safety === 'safe' || analysis.safety === 'unknown'); // Unknown often acceptable depending on config
+                     if (!isSafe) failureReason = "Contenu marqué comme UNSAFE par Google.";
+                 }
+            } catch(e) {
+                 isSafe = false;
+                 console.error("Video Check Failed:", e);
+                 failureReason = "Erreur technique lors de l'analyse.";
+            }
 
             if (isSafe) {
                 selectedMedia = { type: 'video', url: media.url, poster: media.poster };
-                analysisContext = `MEDIA: Vidéo analysée (Safe). Contenu visuel: ${media.title || 'Vidéo standard'}.`;
+                analysisContext = `MEDIA: Vidéo analysée et validée (Safe). Titre: ${media.title || 'Vidéo'}.`;
             } else {
-                console.warn('⚠️ Video flagged as unsafe by Google. Falling back to poster.');
+                console.warn(`⚠️ Video rejected: ${failureReason}`);
+                // FALLBACK SUR L'IMAGE
                 selectedMedia = { type: 'image', url: media.poster, isFallback: true };
-                analysisContext = `MEDIA: La vidéo a été rejetée par le filtre de sécurité. On utilise l'image de couverture à la place.`;
+                // ON PRÉVIENT L'UTILISATEUR VIA LE CONTEXTE
+                analysisContext = `MEDIA NOTE: La vidéo a été rejetée ou n'a pas pu être analysée (${failureReason}). L'image de couverture est utilisée à la place.`;
             }
         } else if (media && media.type === 'image') {
              selectedMedia = { type: 'image', url: media.url };
