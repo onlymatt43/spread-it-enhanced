@@ -372,6 +372,21 @@ app.set('views', path.join(__dirname, 'views'));
 
 // Routes
 
+// Schedule periodic trending refresh (every 15 minutes)
+try {
+  cron.schedule('*/15 * * * *', async () => {
+    try {
+      console.log('⏱️ Refreshing trending topics (cron)');
+      await fetchTrendingTopics(true);
+      console.log('✅ Trending refreshed');
+    } catch (e) {
+      console.warn('Trending refresh failed:', e && e.message ? e.message : e);
+    }
+  });
+} catch (e) {
+  console.warn('Cron scheduling not available:', e && e.message ? e.message : e);
+}
+
 // --- NEW ENDPOINT: Handles the actual submission from the popup ---
 app.post('/api/smart-share-submit', express.json(), async (req, res) => {
     try {
@@ -1345,47 +1360,26 @@ function censorText(text) {
 async function improveContentWithAI(content, options, trending = {}) {
   const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
-  const trendingHashtags = Array.isArray(trending.hashtags) ? trending.hashtags.slice(0, 10) : [];
-  const trendingKeywords = Array.isArray(trending.keywords) ? trending.keywords.slice(0, 10) : [];
-  const trendingVocabulary = Array.isArray(trending.vocabulary) ? trending.vocabulary.slice(0, 10) : [];
+  // Trending enrichment
+  const trendingHashtags = Array.isArray(trending.hashtags) ? trending.hashtags.slice(0, 20) : [];
+  const trendingKeywords = Array.isArray(trending.keywords) ? trending.keywords.slice(0, 20) : [];
+  const trendingVocabulary = Array.isArray(trending.vocabulary) ? trending.vocabulary.slice(0, 20) : [];
+  const perPlatform = trending.perPlatform || {};
+  const optimalTimes = trending.optimalTimes || {};
 
-  const trendingBlock = (trendingHashtags.length || trendingKeywords.length || trendingVocabulary.length)
-    ? `\n**Tendances du moment :**\n- Hashtags populaires : ${trendingHashtags.join(', ') || 'Aucun'}\n- Thèmes dominants : ${trendingKeywords.join(', ') || 'Aucun'}\n- Vocabulaire à privilégier : ${trendingVocabulary.join(', ') || 'Aucun'}\n`
-    : '';
+  const trendingBlock = `\n**Tendances du moment :**\n- Hashtags globaux : ${trendingHashtags.join(', ') || 'Aucun'}\n- Mots-clés : ${trendingKeywords.join(', ') || 'Aucun'}\n- Vocabulaire : ${trendingVocabulary.join(', ') || 'Aucun'}\n`;
 
-  const prompt = `Tu es un expert en marketing digital et création de contenu engageant.
+  const platformBlocks = Object.entries(perPlatform).map(([p, v]) => `\n- ${p.toUpperCase()} : ${Array.isArray(v.hashtags)? v.hashtags.slice(0,8).join(', ') : ''}`).join('\n');
 
-Analyse ce contenu et génère des optimisations pour les réseaux sociaux :
+  const timesBlock = Object.entries(optimalTimes).map(([p, v]) => `\n- ${p.toUpperCase()} : ${Array.isArray(v.recommended)? v.recommended.join(', ') : JSON.stringify(v)}`).join('\n');
 
-**Contenu original :**
-${content}
+  const prompt = `Tu es un expert en marketing digital et création de contenu engageant. Utilise les tendances par réseau ci‑dessous pour adapter les captions, hashtags et horaires.
 
-**Instructions :**
-- Style : ${options.style || 'sexy-bold-confident'}
-- Longueur : ${options.length || 'moyen'}
-- Mots-clés : ${options.keywords || 'aucun'}
-${trendingBlock}
+**Données tendances :**${trendingBlock}${platformBlocks.length? '\n**Par plateforme :**\n' + platformBlocks : ''}${timesBlock.length? '\n**Horaires recommandés :**\n' + timesBlock : ''}
 
-**Génère :**
-1. **Contenu amélioré** : Version corrigée et optimisée (garde le ton humain)
-2. **Captions par plateforme** : Adaptées à chaque réseau
-3. **Hashtags** : 6 hashtags trending Facebook
-4. **Analyse sentiment** : positif/négatif/neutre
+**Contenu original :**\n${content}
 
-**Format JSON :**
-{
-  "improved_content": "contenu amélioré",
-  "captions": {
-    "facebook": "caption optimisée Facebook",
-    "instagram": "caption optimisée Instagram",
-    "twitter": "caption optimisée Twitter (max 280 chars)",
-    "linkedin": "caption optimisée LinkedIn",
-    "tiktok": "caption optimisée TikTok"
-  },
-  "hashtags": ["#hashtag1", "#hashtag2", ...],
-  "sentiment": "positif|negatif|neutre",
-  "seo_score": 85
-}`;
+**Instructions :**\n- Style : ${options.style || 'professionnel'}\n- Longueur : ${options.length || 'moyen'}\n- Mots-clés : ${options.keywords || 'aucun'}\n\n**Génère :**\n1) Contenu amélioré (corrige grammaire, respecte le sens original).\n2) Captions optimisées par plateforme (Facebook, Instagram, Twitter/X, LinkedIn, TikTok).\n3) Pour chaque plateforme, propose 5 hashtags triés par visibilité et une raison brève.\n4) Propose les meilleurs créneaux horaires pour publication par plateforme et une justification.\n5) Fournis une note SEO (0-100) et sentiment (positif/neutre/négatif).\n\n**Format JSON strict :**\n{\n  "improved_content": "...",\n  "captions": {"facebook":"...","instagram":"...","twitter":"...","linkedin":"...","tiktok":"..."},\n  "hashtags": {"facebook":["#..."],"instagram":["#..."],"twitter":["#..."],"linkedin":["#..."],"tiktok":["#..."]},\n  "optimal_times": {"facebook":["HH:MM"],"instagram":["HH:MM"]},\n  "sentiment":"positif|negatif|neutre",\n  "seo_score": 0\n}`;
 
   const response = await openai.chat.completions.create({
     model: model,

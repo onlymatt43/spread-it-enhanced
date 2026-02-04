@@ -12,6 +12,8 @@ const cacheState = {
 const DEFAULT_TTL_MS = (parseInt(process.env.TRENDING_CACHE_TTL_MINUTES || '15', 10) || 15) * 60 * 1000;
 const LOCAL_FALLBACK_FILE = path.join(__dirname, '..', 'data', 'trending.json');
 
+const REDIS_KEY = 'spreadit:trending';
+
 function normaliseList(items = []) {
   return [...new Set(
     items
@@ -107,6 +109,22 @@ function splitTopics(rawTopics) {
 async function fetchTrendingTopics(forceRefresh = false) {
   const now = Date.now();
 
+  // Try Redis cache first if configured
+  if (!forceRefresh && process.env.REDIS_URL) {
+    try {
+      const { createClient } = require('redis');
+      const client = createClient({ url: process.env.REDIS_URL });
+      await client.connect();
+      const raw = await client.get(REDIS_KEY);
+      await client.disconnect();
+      if (raw) {
+        try { const parsed = JSON.parse(raw); return parsed; } catch (e) { /* continue */ }
+      }
+    } catch (e) {
+      console.warn('Redis trending read failed:', e && e.message ? e.message : e);
+    }
+  }
+
   if (!forceRefresh && cacheState.data && cacheState.expiresAt > now) {
     return cacheState.data;
   }
@@ -158,6 +176,19 @@ async function fetchTrendingTopics(forceRefresh = false) {
 
   cacheState.data = payload;
   cacheState.expiresAt = now + DEFAULT_TTL_MS;
+
+  // Store into Redis if available
+  if (process.env.REDIS_URL) {
+    try {
+      const { createClient } = require('redis');
+      const client = createClient({ url: process.env.REDIS_URL });
+      await client.connect();
+      await client.setEx(REDIS_KEY, Math.round(DEFAULT_TTL_MS / 1000), JSON.stringify(payload));
+      await client.disconnect();
+    } catch (e) {
+      console.warn('Redis trending write failed:', e && e.message ? e.message : e);
+    }
+  }
 
   return payload;
 }
