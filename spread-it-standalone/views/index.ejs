@@ -60,6 +60,8 @@
             backdrop-filter: blur(10px);
         }
     </style>
+    <!-- Composer assets (modal will load /composer) -->
+    <link rel="stylesheet" href="/css/composer.css">
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark">
@@ -150,5 +152,31 @@
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+        <!-- Composer modal (iframe) -->
+        <div id="composerModal" style="display:none;position:fixed;inset:0;z-index:2000;align-items:center;justify-content:center;"> 
+            <div style="position:absolute;inset:0;background:rgba(0,0,0,.6);"></div>
+            <div style="position:relative;width:90%;max-width:1100px;height:80%;background:transparent;border-radius:8px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+                <button id="closeComposer" style="position:absolute;right:8px;top:8px;z-index:10;background:#fff;border:none;border-radius:6px;padding:6px 10px;cursor:pointer">✕</button>
+                <iframe id="composerFrame" src="" style="width:100%;height:100%;border:0;display:block;background:transparent"></iframe>
+            </div>
+        </div>
+
+        <script>
+            (function(){
+                function showComposer(url){
+                    var modal=document.getElementById('composerModal');
+                    var frame=document.getElementById('composerFrame');
+                    frame.src=url; modal.style.display='flex'; document.body.style.overflow='hidden';
+                }
+                function hideComposer(){
+                    var modal=document.getElementById('composerModal'); var frame=document.getElementById('composerFrame'); frame.src=''; modal.style.display='none'; document.body.style.overflow='';
+                }
+                document.getElementById('closeComposer').addEventListener('click',hideComposer);
+                var btn=document.querySelector('.btn-primary.btn-lg');
+                if(btn){ btn.addEventListener('click',function(e){ e.preventDefault(); showComposer('/composer'); }); }
+                // allow external opens via window
+                window.SpreadIt = window.SpreadIt||{}; window.SpreadIt.openComposer = function(q){ var url='/composer'+(q?('?'+q):''); showComposer(url); };
+            })();
+        </script>
 </body>
 </html>
