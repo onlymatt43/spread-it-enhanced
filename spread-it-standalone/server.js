@@ -1213,7 +1213,7 @@ app.post('/api/turso/resource', express.json(), async (req, res) => {
     if (!id || !name) return res.status(400).json({ error: 'id and name required' });
 
     const now = Date.now();
-    const categoryId = 'SOCIAL MEDIA';
+    const categoryId = process.env.TURSO_SOCIAL_CATEGORY_ID || '1770190320';
 
     // First attempt: libSQL (Turso cloud) if configured
     if (process.env.TURSO_LIBSQL_URL && process.env.TURSO_LIBSQL_TOKEN) {
