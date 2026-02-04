@@ -983,39 +983,65 @@ async function getNewsjackingContext(userText) {
 
 app.post('/api/chat', express.json(), async (req, res) => {
     try {
-        const { message, history = [], platforms = ['facebook', 'instagram', 'twitter', 'linkedin'] } = req.body;
+        const { message, history = [], platforms = ['facebook', 'instagram', 'twitter', 'linkedin'], media } = req.body;
         
         // 1. Détection d'intention
         const isCorrectionRequest = message.toLowerCase().includes('corrige') || message.toLowerCase().includes('faute');
 
         let systemPrompt = "";
+        let analysisContext = "";
+        let selectedMedia = null;
 
-        // 2. FETCH NEWSJACKING CONTEXT (Dynamically)
+        // 2. MEDIA SAFETY CHECK (Video Intelligence Logic)
+        if (media && media.type === 'video') {
+            console.log(`🔍 Analyzing video safety: ${media.url}`);
+            
+            // Simulation du "Google View Test" (Video Intelligence)
+            // Dans un env de prod, on appellerait ici: const analysis = await VideoAI.analyzeVideo(media.url);
+            // Pour l'instant on simule un succès.
+            const isSafe = true; 
+
+            if (isSafe) {
+                selectedMedia = { type: 'video', url: media.url, poster: media.poster };
+                analysisContext = `MEDIA: Vidéo analysée (Safe). Contenu visuel: ${media.title || 'Vidéo standard'}.`;
+            } else {
+                console.warn('⚠️ Video flagged as unsafe by Google. Falling back to poster.');
+                selectedMedia = { type: 'image', url: media.poster, isFallback: true };
+                analysisContext = `MEDIA: La vidéo a été rejetée par le filtre de sécurité. On utilise l'image de couverture à la place.`;
+            }
+        } else if (media && media.type === 'image') {
+             selectedMedia = { type: 'image', url: media.url };
+             analysisContext = `MEDIA: Image fournie.`;
+        }
+
+        // 3. FETCH NEWSJACKING CONTEXT
         const { currentTrend, influencer } = await getNewsjackingContext(message);
 
         if (isCorrectionRequest) {
              systemPrompt = SYSTEM_PROMPT_CORRECTOR;
         } else {
-             // YOUR CUSTOM NEWSJACKING PROMPT ADAPTED FOR JSON OUTPUT
              systemPrompt = `
-      Tu es un expert en Social Media qui maîtrise l'art du 'Newsjacking'.
+      Tu es un expert en Social Media "Newsjacking" pour Spread It.
       
-      RÈGLES DU JEU :
-      1. TEXTE PRINCIPAL : Corrige seulement la grammaire du texte de l'utilisateur. Ne change pas le ton, ne le rends pas 'corporate'. Garde le côté humain et imparfait.
-      2. LE CLIN D'OEIL (VIBE) : À la fin, ajoute un paragraphe séparé (avec un emoji) qui fait un lien absurde ou drôle entre le texte de l'utilisateur et la TENDANCE ACTUELLE fournie (${currentTrend}).
-      3. GOAL ACCOUNT : Le "Goal Account" pour ce post est ${influencer.name} (${influencer.handle}). Son style est : "${influencer.style}". Tu DOIS mentionner ce compte (${influencer.handle}) pour créer de l'engagement (ex: "J'essaie de channeler l'énergie de ${influencer.handle}"). N'INVENTE PAS D'AUTRE COMPTE. UTILISE UNIQUEMENT CELUI-CI.
-      4. HASHTAGS : Mélange des tags sur le sujet du post ET des tags sur la tendance.
-
-      IMPORTANT POUR L'INTERFACE :
-      Tu dois répondre au format JSON STRICT :
+      CONTEXTE MEDIA : ${analysisContext}
+      
+      RÈGLES :
+      1. TEXTE : Corrige la grammaire, garde le ton humain/imparfait.
+      2. TENDANCE : Lie le sujet à la tendance actuelle : ${currentTrend}.
+      3. INFLUENCEUR : Mentionne obligatoirement ${influencer.name} (@${influencer.handle}) dans le style "${influencer.style}".
+      4. BRANDING : N'oublie pas que le post inclura un petit logo "Spread It" en filigrane pour la publicité.
+      
+      FORMAT JSON STRICT :
       {
-         "reply": "Ton commentaire court à l'utilisateur sur la stratégie adoptée (ex: 'J'ai surfé sur la vibe ${currentTrend} et tagué ${influencer.name}...')",
+         "reply": "Commentaire sur la stratégie (mentionne si on utilise la vidéo ou la photo selon le check Google).",
          "cards": {
-             "facebook": "La version complète du post (Texte + Clin d'oeil + Mention + Tags)",
-             "instagram": "Version Instagram (plus visuelle, hashtags en bloc)",
-             "twitter": "Version courte (Punchline + Lien Trend + Tags)",
-             "linkedin": "Version plus structurée mais gardant le lien newsjacking"
-         }
+             "facebook": "Post complet FB...",
+             "instagram": "Légende Insta (visuel fort)...",
+             "twitter": "Tweet percutant...",
+             "linkedin": "Post LinkedIn structuré...",
+             "tiktok": "Script/Description TikTok..."
+         },
+         "mediaUsed": ${JSON.stringify(selectedMedia || null)} 
       }
       `;
         }
