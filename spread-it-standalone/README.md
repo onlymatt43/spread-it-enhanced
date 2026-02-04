@@ -8,7 +8,7 @@ Une application web moderne pour créer, améliorer, analyser et partager du con
 - **Analyse de Vision** : Analyse intelligente d'images avec Google Cloud Vision (labels, textes, logos)
 - **Tendances en temps réel** : Détection des sujets chauds sur les réseaux pour inspirer votre contenu
 - **Galerie de Médias** : Gestion intégrée des images et médias
-- **Système de Leads** : Capture de prospects avec stockage fichier JSON
+- **Système de Leads** : Capture et gestion de prospects (MongoDB)
 - **Partage Multi-plateforme** : Facebook, Twitter, LinkedIn, Instagram, et support expérimental TikTok
 - **Optimisation d'images** : Redimensionnement et formatage automatique avec Sharp
 - **Modération Automatique** : Filtrage de contenu via Google Perspective/Vision
@@ -18,7 +18,7 @@ Une application web moderne pour créer, améliorer, analyser et partager du con
 ## Architecture Technique
 
 - **Backend** : Node.js + Express
-- **Stockage** : Fichiers JSON (Leads) + SQLite (Sessions)
+- **Base de données** : MongoDB (Leads, Données) + SQLite (Sessions)
 - **IA & Traitement** : OpenAI GPT-4, Google Cloud Vision
 - **Traitement d'image** : Sharp, Canvas
 - **Frontend** : EJS templates + Bootstrap 5 + JS Client
@@ -28,7 +28,7 @@ Une application web moderne pour créer, améliorer, analyser et partager du con
 
 ### Prérequis
 - Node.js >= 18.0.0
-- Aucun serveur MongoDB requis (stockage leads en fichier)
+- Compte MongoDB (Atlas ou local)
 - Clés API (OpenAI, Google Cloud, Réseaux Sociaux)
 
 ### Sur Vercel
@@ -57,7 +57,8 @@ OPENAI_API_KEY=votre_clé
 GOOGLE_CLOUD_VISION_KEY=votre_clé_google
 Note: Google Credentials peuvent nécessiter un chemin de fichier ou un JSON stringifié
 
-# Stockage
+# Base de Données
+MONGODB_URI=mongodb+srv://... (Pour les leads et données persistantes)
 SESSION_DB_NAME=sessions.sqlite
 
 # Sécurité & Session
@@ -75,7 +76,7 @@ INSTAGRAM_ACCESS_TOKEN=...
 
 - **OpenAI API** : Génération de texte
 - **Google Cloud Vision API** : Analyse d'images
-- **Stockage fichier** : Leads conservés dans `storage/leads.json`
+- **MongoDB Atlas** : Stockage de données
 - **APIs Réseaux Sociaux** : Graph API, Twitter V2, etc.
 
 ## Utilisation
@@ -92,7 +93,7 @@ INSTAGRAM_ACCESS_TOKEN=...
 
 L'endpoint principal `/api/create-post` permet d'envoyer du contenu depuis un site externe.
 Nouveaux endpoints :
-- `POST /api/leads` : Capture d'un lead (stockage local)
+- `GET /api/leads` : Récupération des leads
 - `GET /api/gallery/:type` : Accès aux ressources média
 
 ## Développement
