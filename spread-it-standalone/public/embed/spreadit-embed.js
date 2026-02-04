@@ -9,7 +9,7 @@
   function ensureModal(){
     if(document.getElementById('spreadit-embed-modal')) return;
     var modal = document.createElement('div'); modal.id='spreadit-embed-modal';
-    modal.style.cssText='display:none;position:fixed;inset:0;z-index:2147483647;align-items:center;justify-content:center;font-family:sans-serif;';
+    modal.style.cssText='display:none; position:fixed; inset:0; z-index:2147483647; align-items:center; justify-content:center; font-family:sans-serif;';
     modal.innerHTML = '\n      <div style="position:absolute;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(4px)"></div>\n      <div style="position:relative;width:90%;max-width:1100px;height:85%;background:#000;border-radius:12px;overflow:hidden;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.1)">\n        <button id="spreadit-embed-close" style="position:absolute;right:12px;top:12px;z-index:10;background:rgba(255,255,255,0.1);color:#fff;border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:background 0.2s">✕</button>\n        <iframe id="spreadit-embed-frame" src="" style="width:100%;height:100%;border:0;display:block;background:#0b0f14"></iframe>\n      </div>';
     document.documentElement.appendChild(modal);
     document.getElementById('spreadit-embed-close').addEventListener('click',hide);
