@@ -60,6 +60,13 @@
         <header class="platform-card-header">
           <strong><%= p.charAt(0).toUpperCase()+p.slice(1) %></strong>
           <div class="platform-actions">
+            <% if (typeof configured !== 'undefined' && !configured[p]) { %>
+                <% if (p === 'linkedin') { %>
+                    <a href="/auth/linkedin/login" target="_blank" class="btn-small">Connecter</a>
+                <% } else { %>
+                    <span class="badge-warning" title="Missing credentials in Env">Non connecté</span>
+                <% } %>
+            <% } %>
             <label><input type="checkbox" class="platform-select" value="<%= p %>" checked> Publier</label>
             <button class="btn-small improve-card">Améliorer</button>
           </div>

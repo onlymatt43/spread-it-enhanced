@@ -869,9 +869,18 @@ app.get('/create', (req, res) => {
 
 // New composer UI (Standalone) - stack cards + AI chat popup
 app.get('/composer', (req, res) => {
+  const configured = {
+      linkedin: !!(process.env.LINKEDIN_ACCESS_TOKEN || (req.session.tokens && req.session.tokens.linkedin)),
+      facebook: !!(process.env.FACEBOOK_ACCESS_TOKEN || (req.session.tokens && req.session.tokens.facebook)),
+      twitter: !!(process.env.TWITTER_ACCESS_TOKEN),
+      instagram: !!(process.env.INSTAGRAM_ACCESS_TOKEN),
+      tiktok: false 
+  };
+
   res.render('composer', {
     title: 'Composer - Spread It',
-    user: req.session.user
+    user: req.session.user,
+    configured
   });
 });
 
