@@ -10,6 +10,20 @@
   const aiPolish = document.getElementById('aiPolish');
   const switchToChat = document.getElementById('switchToChat');
 
+  // Composer media shared state (prefill/embed)
+  let composerMedia = { video: null, poster: null, title: null };
+  function renderMediaIn(element, video, poster){
+    if (!element) return;
+    element.innerHTML = '';
+    try{
+      if (/\.(mp4|webm|ogg)(\?|$)/i.test(video) || (video && video.startsWith && video.startsWith('blob:'))){
+        const v = document.createElement('video'); v.src = video; v.controls = true; v.style.maxWidth = '100%'; if (poster) v.poster = poster; element.appendChild(v);
+      } else if (video){
+        const iframe = document.createElement('iframe'); iframe.src = video; iframe.style.width='100%'; iframe.style.height='240px'; iframe.frameBorder=0; iframe.allow='autoplay; encrypted-media; picture-in-picture'; element.appendChild(iframe);
+      }
+    }catch(e){ console.warn('renderMediaIn error', e); }
+  }
+
   function updateCount(){
     const text = editor.textContent || '';
     charCount.textContent = text.trim().length;
@@ -85,11 +99,25 @@
       const form = new FormData(); form.append('content', content); form.append('style','professionnel'); form.append('length','moyen');
       const res = await fetch('/create', {method:'POST', body: form});
       const json = await res.json();
-      if(json && json.success && json.content){
-        // Replace editor content but preserve intent
-        editor.textContent = json.content;
+      if(json && json.success){
+        // Replace editor content
+        editor.textContent = json.content || editor.textContent;
         updateCount();
         appendMsg('Contenu amélioré et appliqué au post.', 'ai');
+
+        // Populate per-platform captions and hashtags
+        const platforms = ['facebook','instagram','twitter','linkedin','tiktok'];
+        platforms.forEach(p => {
+          try{
+            const ta = document.querySelector('.platform-caption[data-platform="'+p+'"]');
+            if (ta) ta.value = (json.captions && json.captions[p]) ? json.captions[p] : (json.content || editor.textContent || '');
+            const hnode = document.querySelector('.platform-hashtags[data-platform="'+p+'"]');
+            if (hnode){ hnode.innerHTML = ''; const tags = (json.hashtags && json.hashtags[p]) ? json.hashtags[p] : []; tags.slice(0,20).forEach(t => { const b = document.createElement('span'); b.className='tag'; b.textContent = t; hnode.appendChild(b); }); }
+            // ensure media present
+            const mediaArea = document.querySelector('.platform-card-media[data-platform="'+p+'"]'); if (mediaArea && composerMedia.video) renderMediaIn(mediaArea, composerMedia.video, composerMedia.poster);
+          }catch(e){/*ignore*/}
+        });
+
       } else {
         appendMsg('Erreur amélioration: ' + (json && json.error ? json.error : 'inconnue'), 'ai');
       }
@@ -117,4 +145,51 @@
     }catch(e){ alert('Erreur réseau lors de la publication'); }
   });
 
-})();
+    // Prefill from query params (embed usage)
+    function prefillFromQuery(){
+      try{
+        const params = new URLSearchParams(window.location.search);
+        if (!params.get('prefill')) return;
+        const title = params.get('title') ? decodeURIComponent(params.get('title')) : '';
+        const video = params.get('video_url') ? decodeURIComponent(params.get('video_url')) : '';
+        const poster = params.get('poster') ? decodeURIComponent(params.get('poster')) : '';
+
+        if (title && !(editor.textContent||'').trim()) {
+          editor.textContent = title;
+          updateCount();
+          appendMsg('Pré-rempli depuis la page source', 'ai');
+        }
+
+        if (video) {
+          // Insert preview into main card
+          const cardBody = document.querySelector('.card-body');
+          if (cardBody){
+            const container = document.createElement('div'); container.className='prefill-media'; renderMediaIn(container, video, poster); cardBody.insertBefore(container, cardBody.firstChild);
+          }
+
+          // Insert into each platform card media area
+          const mediaAreas = document.querySelectorAll('.platform-card-media');
+          mediaAreas.forEach(function(a){ renderMediaIn(a, video, poster); });
+        }
+      }catch(e){ console.warn('Prefill parse error', e); }
+    }
+
+    // Run prefill on load (if any query params present)
+    prefillFromQuery();
+
+    // per-card 'Améliorer' buttons: send card caption to AI chat and replace
+    document.querySelectorAll('.improve-card').forEach(btn => {
+      btn.addEventListener('click', async function(e){
+        const card = e.target.closest('.platform-card'); if (!card) return;
+        const platform = card.getAttribute('data-platform');
+        const ta = card.querySelector('.platform-caption'); if (!ta) return;
+        const prompt = `Améliore et adapte cette légende pour ${platform.toUpperCase()} en respectant le style original :\n\n${ta.value}`;
+        // call non-streaming AI chat endpoint
+        try{
+          const r = await fetch('/api/ai-chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({prompt})});
+          const j = await r.json(); if (j && j.reply){ ta.value = j.reply; const note = document.createElement('div'); note.className='ai-note'; note.textContent='Amélioré par AI'; card.querySelector('.platform-card-body').appendChild(note); }
+        }catch(e){ console.warn('improve-card error', e); }
+      });
+    });
+
+  })();

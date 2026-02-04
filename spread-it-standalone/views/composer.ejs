@@ -52,6 +52,27 @@
     </div>
   </main>
 
+  <!-- Platform cards: one card per social network for preview & per-platform caption -->
+  <section class="platform-cards" id="platformCards">
+    <% const platforms = ['facebook','instagram','twitter','linkedin','tiktok']; %>
+    <% platforms.forEach(function(p){ %>
+      <article class="platform-card" data-platform="<%= p %>">
+        <header class="platform-card-header">
+          <strong><%= p.charAt(0).toUpperCase()+p.slice(1) %></strong>
+          <div class="platform-actions">
+            <label><input type="checkbox" class="platform-select" value="<%= p %>" checked> Publier</label>
+            <button class="btn-small improve-card">Améliorer</button>
+          </div>
+        </header>
+        <div class="platform-card-media" data-platform="<%= p %>"></div>
+        <div class="platform-card-body">
+          <textarea class="platform-caption" data-platform="<%= p %>" placeholder="Légende pour <%= p %>"></textarea>
+          <div class="platform-hashtags" data-platform="<%= p %>"></div>
+        </div>
+      </article>
+    <% }); %>
+  </section>
+
   <aside class="ai-chat" id="aiChat">
     <div class="ai-header">
       <strong>Assistant AI</strong>
