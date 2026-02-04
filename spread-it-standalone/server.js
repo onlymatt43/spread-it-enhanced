@@ -940,6 +940,9 @@ const INFLUENCER_DB = {
 };
 
 function getGoalAccount(text) {
+    // Safety check for text
+    if (!text || typeof text !== 'string') return INFLUENCER_DB["tech_ai"][0];
+
     const t = text.toLowerCase();
     let category = "tech_ai"; // Default
 
@@ -978,11 +981,11 @@ async function getNewsjackingContext(userText) {
         return { currentTrend, influencer };
 
     } catch (e) {
-        console.warn('Trends Fetch Error, using fallback:', e.message);
+        console.warn('Trends Fetch Error, using fallback:', e);
         // Fallback Safe
         return { 
             currentTrend: "La sortie imminente de GTA VI", 
-            influencer: getGoalAccount(userText) // Still use strict DB even in fallback
+            influencer: getGoalAccount(userText || "") // Ensure string passed
         };
     }
 }
@@ -991,8 +994,10 @@ app.post('/api/chat', express.json(), async (req, res) => {
     try {
         const { message, history = [], platforms = ['facebook', 'instagram', 'twitter', 'linkedin'], media } = req.body;
         
+        console.log(`[Chat API] Received message: "${message ? message.substring(0, 50) : 'null'}..."`);
+
         // 1. Détection d'intention
-        const isCorrectionRequest = message.toLowerCase().includes('corrige') || message.toLowerCase().includes('faute');
+        const isCorrectionRequest = (message || "").toLowerCase().includes('corrige') || (message || "").toLowerCase().includes('faute');
 
         let systemPrompt = "";
         let analysisContext = "";
