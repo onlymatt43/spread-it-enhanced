@@ -40,8 +40,8 @@ class Spread_It_Plugin {
         add_shortcode('spread-it-social', [$this,'shortcode_social']);
 
         add_action('wp_enqueue_scripts',  [$this,'enqueue_assets']);
-        // Render composer on front page (open via button/modal)
-        add_action('wp_footer',  [$this,'maybe_render_frontpage_composer']);
+        // Note: front-page composer injection disabled — composer served from standalone app
+        // add_action('wp_footer',  [$this,'maybe_render_frontpage_composer']);
 
         /* Cron handler */
         add_action(self::EVENT_AI_JOB, [$this,'run_ai_job'], 10, 1);
@@ -225,7 +225,9 @@ JS;
 
     /* ================ FRONT PAGE COMPOSER ================ */
     public function maybe_render_frontpage_composer(){
-        if (is_admin()) return;
+      // Disabled: keep composer logic only in standalone app.
+      return;
+      if (is_admin()) return;
         // Render on front page or posts index (some WP sites use the blog index as the homepage)
         if (!is_front_page() && !is_home()) return;
 
