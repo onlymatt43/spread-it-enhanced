@@ -44,9 +44,10 @@
     var logoUrl = composerBase + '/assets/logo-video-spread-it.mp4';
     
     // Structure: Circular Logo + Text (expandable or just iconic)
+    // Note: removed 'autoplay' so it sits on first frame. Added class for JS control.
     btn.innerHTML = `
         <div style="width:24px;height:24px;border-radius:50%;overflow:hidden;flex-shrink:0;background:#000;border:1px solid rgba(255,255,255,0.3)">
-            <video src="${logoUrl}" autoplay loop muted playsinline style="width:100%;height:100%;object-fit:cover;display:block"></video>
+            <video class="sp-logo-vid" src="${logoUrl}" loop muted playsinline preload="auto" style="width:100%;height:100%;object-fit:cover;display:block"></video>
         </div>
         <span>Spread It</span>
     `;
@@ -77,15 +78,21 @@
         transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     `;
 
-    // Show on parent hover
-    parent.addEventListener('mouseenter', function(){ 
-        btn.style.opacity = '1'; 
-        btn.style.transform = 'translateY(0)';
-    });
-    parent.addEventListener('mouseleave', function(){ 
-        btn.style.opacity = '0'; 
-        btn.style.transform = 'translateY(-5px)';
-    });
+    // Interaction: Play video on hover, Reset on leave
+    var vid = btn.querySelector('.sp-logo-vid');
+    if(vid) {
+        btn.addEventListener('mouseenter', function(){ 
+            btn.style.opacity = '1'; 
+            btn.style.transform = 'translateY(0)';
+            vid.play().catch(function(e){/*ignore autoplay deny*/}); 
+        });
+        btn.addEventListener('mouseleave', function(){ 
+            btn.style.opacity = '0'; 
+            btn.style.transform = 'translateY(-5px)';
+            vid.pause(); 
+            vid.currentTime = 0; // Reset to first frame
+        });
+    }
 
     // Handle click
     btn.addEventListener('click', function(e){
