@@ -74,21 +74,29 @@
             </div>
         </div>
 
-        <!-- Visual Preview: Mimics the social network UI -->
-        <div class="social-preview theme-dark p-<%= p %>">
+        <!-- Visual Preview: Reflects REAL status -->
+        <div class="social-preview theme-dark p-<%= p %>" style="<%= (!configured[p]) ? 'opacity:0.75; filter:grayscale(1);' : '' %>">
             <% if(p !== 'tiktok') { %>
             <div class="sp-header">
-                <div class="sp-avatar"><img src="https://ui-avatars.com/api/?name=User&background=random" alt=""></div>
+                <div class="sp-avatar">
+                    <!-- Gray avatar if disconnected -->
+                    <img src="https://ui-avatars.com/api/?name=<%= configured[p] ? 'User' : '?' %>&background=<%= configured[p] ? '007bff' : '555' %>&color=fff" alt="">
+                </div>
                 <div class="sp-meta">
                     <div class="sp-name">
-                        Mathieu Courchesne 
-                        <% if(p==='twitter'||p==='instagram'||p==='facebook'||p==='linkedin'){ %> <span class="verified-badge">✔</span> <% } %>
+                        <% if(configured[p]) { %>
+                            <%= (typeof user !== 'undefined' && user && user.name) ? user.name : 'Utilisateur Connecté' %> 
+                            <span class="verified-badge">✔</span>
+                        <% } else { %>
+                            Non Connecté
+                        <% } %>
                     </div>
                     <div class="sp-sub">
-                        <% if(p==='twitter'){ %> @mathieuc • 1m <% } %>
-                        <% if(p==='facebook'){ %> 1 min • <span class="globe-icon">🌎</span> <% } %>
-                        <% if(p==='linkedin'){ %> Founder @ Spread It • 1m • 🌐 <% } %>
-                        <% if(p==='instagram'){ %> Sponsored <% } %>
+                        <% if(configured[p]) { %>
+                            <%= p.charAt(0).toUpperCase()+p.slice(1) %> Officiel • À l'instant
+                        <% } else { %>
+                            Configuration requise
+                        <% } %>
                     </div>
                 </div>
                 <div class="sp-menu">•••</div>
@@ -99,7 +107,7 @@
                 <!-- Text Area (Acting as Post Content) -->
                 <!-- Order is controlled by CSS per platform (Insta: Media first) -->
                 <div class="sp-text-content">
-                    <textarea class="platform-caption inputs-invisible" data-platform="<%= p %>" placeholder="Votre texte <%= p %>..."></textarea>
+                    <textarea class="platform-caption inputs-invisible" data-platform="<%= p %>" placeholder="<%= configured[p] ? ('Votre légende pour ' + p + '...') : 'Connectez ce compte pour éditer...' %>" <%= !configured[p] ? 'disabled' : '' %>></textarea>
                     <div class="platform-hashtags" data-platform="<%= p %>"></div>
                 </div>
                 
@@ -117,9 +125,9 @@
                            <div class="tt-icon">↪</div>
                         </div>
                         <div class="tiktok-bottom">
-                           <div class="tk-name">@mathieu</div>
-                           <div class="tk-desc">Caption goes here... #fyp</div>
-                           <div class="tk-sound">♫ Original Sound</div>
+                           <div class="tk-name"><%= configured[p] ? '@utilisateur' : '@inconnu' %></div>
+                           <div class="tk-desc"><%= configured[p] ? 'Votre caption...' : 'Compte non connecté' %></div>
+                           <div class="tk-sound">♫ Son Original</div>
                         </div>
                     </div>
                 <% } %>
