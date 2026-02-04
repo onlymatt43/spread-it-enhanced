@@ -269,15 +269,29 @@
     // per-card 'Améliorer' buttons: send card caption to AI chat and replace
     document.querySelectorAll('.improve-card').forEach(btn => {
       btn.addEventListener('click', async function(e){
-        const card = e.target.closest('.platform-card'); if (!card) return;
-        const platform = card.getAttribute('data-platform');
-        const ta = card.querySelector('.platform-caption'); if (!ta) return;
+        // Fixed selector for new UI (Feb 2026)
+        const wrapper = e.target.closest('.platform-wrapper'); if (!wrapper) return;
+        const platform = wrapper.getAttribute('data-platform');
+        const ta = wrapper.querySelector('.platform-caption'); if (!ta) return;
         const prompt = `Améliore et adapte cette légende pour ${platform.toUpperCase()} en respectant le style original :\n\n${ta.value}`;
-        // call non-streaming AI chat endpoint
+        
+        // Visual feedback
+        const originalText = btn.textContent;
+        btn.textContent = '...';
+        
         try{
           const r = await fetch('/api/ai-chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({prompt})});
-          const j = await r.json(); if (j && j.reply){ ta.value = j.reply; const note = document.createElement('div'); note.className='ai-note'; note.textContent='Amélioré par AI'; card.querySelector('.platform-card-body').appendChild(note); }
-        }catch(e){ console.warn('improve-card error', e); }
+          const j = await r.json(); 
+          if (j && j.reply){ 
+              ta.value = j.reply; 
+              // Flash success
+              btn.textContent = '✨ Fait';
+              setTimeout(()=> btn.textContent = originalText, 2000);
+          }
+        }catch(e){ 
+            console.warn('improve-card error', e); 
+            btn.textContent = 'Error';
+        }
       });
     });
 
