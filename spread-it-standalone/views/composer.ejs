@@ -93,7 +93,7 @@
     });
 
     // Simple script to handle Chat logic -> UI
-    document.getElementById('sendMessage').addEventListener('click', handleSend);
+    document.getElementById('sendMessage').addEventListener('click', () => handleSend());
     tx.addEventListener('keydown', (e) => {
         if(e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -101,18 +101,47 @@
         }
     });
 
-    async function handleSend(){
+    // --- AUTO-DETECT PREFILLED CONTENT (Video / Media) ---
+    document.addEventListener('DOMContentLoaded', () => {
+        const params = new URLSearchParams(window.location.search);
+        const prefill = params.get('prefill');
+        const videoUrl = params.get('video_url');
+        const title = params.get('title');
+        
+        if(prefill && videoUrl) {
+            // Show a "System" message indicating detection
+            addMessage('ai', `🎥 Média détecté : <strong>${title || 'Vidéo'}</strong><br>Je prépare une stratégie de diffusion...`);
+            
+            // Auto-trigger generation
+            const prompt = `Je veux partager cette vidéo : "${title || 'Nouvelle vidéo'}" (Lien: ${videoUrl}). Génère des posts engageants pour mes réseaux en utilisant la technique du Newsjacking.`;
+            handleSend(prompt);
+        }
+        
+        if (params.get('platforms')) {
+           // Handle platform selection updates if needed
+        }
+    });
+
+    async function handleSend(forcedText = null){
         const input = document.getElementById('userPrompt');
-        const txt = input.value.trim();
+        let txt = forcedText || input.value.trim();
+        
         if(!txt) return;
 
-        // User Message
-        addMessage('user', txt);
-        input.value = '';
-        input.style.height = 'auto';
+        // User Message (Skip visual for forcedText if we want, or show it)
+        // For auto-send, we show it to confirm intent
+        if (!forcedText) {
+            addMessage('user', txt);
+            input.value = '';
+            input.style.height = 'auto';
+        } else {
+             // For system triggered, maybe just log "Demande de génération pour le média..." 
+             // or add a user bubble representing the context
+             addMessage('user', `🚀 Génère les posts pour : ${txt.split('(')[0]}`);
+        }
 
         // AI Loading State
-        const loadingId = addMessage('ai', '<span class="typing-dots">...</span>');
+        const loadingId = addMessage('ai', '<span class="typing-dots">Analyse de la tendance actuelle...</span>');
 
         try {
             const response = await fetch('/api/chat', {
