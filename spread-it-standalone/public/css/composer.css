@@ -1,0 +1,53 @@
+:root{
+  --bg:#0b0f14; --panel:rgba(255,255,255,0.04); --glass:rgba(255,255,255,0.06);
+  --accent:linear-gradient(90deg,#7b61ff,#00d4ff);
+  --muted:rgba(255,255,255,0.6);
+}
+body.composer-dark{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; background:radial-gradient(ellipse at 20% 10%, rgba(124,58,237,0.12), transparent 10%), linear-gradient(180deg,#06070a,#0b0f14); color:#eaf2ff; height:100vh; margin:0;}
+.composer-backdrop{position:fixed; inset:0; backdrop-filter:blur(6px) saturate(1.05); -webkit-backdrop-filter:blur(6px);}
+.composer-topbar{position:fixed;left:0;right:0;top:0;height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:linear-gradient(180deg, rgba(255,255,255,0.03), transparent);box-shadow:0 8px 30px rgba(2,6,23,0.6);z-index:40}
+.composer-topbar .brand{font-weight:700;letter-spacing:0.6px}
+.btn-small{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);padding:6px 10px;border-radius:8px}
+.composer-stage{display:flex;align-items:center;justify-content:center;height:100vh;padding-top:56px}
+.cards-stack{position:relative;width:820px;height:520px;display:flex;align-items:center;justify-content:center}
+.post-card{position:absolute;width:620px;height:420px;border-radius:18px;box-shadow:0 12px 40px rgba(2,6,23,0.7);overflow:hidden;transition:transform .25s ease, box-shadow .25s ease}
+.post-card.underset{transform:scale(.96)}
+.post-card.underside{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,0.04)}
+.post-card.card-4{transform:translateY(36px) scale(.92);filter:brightness(.85)}
+.post-card.card-3{transform:translateY(24px) scale(.94);filter:brightness(.9)}
+.post-card.card-2{transform:translateY(12px) scale(.96);filter:brightness(.95)}
+.post-card.top-card{transform:translateY(0) scale(1);border:1px solid rgba(255,255,255,0.06);background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.03));backdrop-filter: blur(4px);}
+.card-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.02)}
+.platforms .badge.p{display:inline-block;padding:6px 10px;border-radius:14px;margin-right:6px;font-size:13px;color:#fff;opacity:0.95}
+.platforms .facebook{background:#1877f2}
+.platforms .twitter{background:#1da1f2}
+.platforms .instagram{background:linear-gradient(45deg,#f09433,#e6683c,#dc2743)}
+.platforms .linkedin{background:#0077b5}
+.card-actions button{margin-left:8px}
+.btn-accent{background:var(--accent);color:#021; padding:8px 12px;border-radius:10px;border:none}
+.btn-ghost{background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.04);padding:8px 10px;border-radius:8px}
+.card-body{padding:18px;height:300px;display:flex;flex-direction:column}
+.editor{flex:1;padding:14px;border-radius:12px;background:linear-gradient(180deg, rgba(0,0,0,0.28), rgba(255,255,255,0.02));border:1px solid rgba(255,255,255,0.03);outline:none;color:#eaf2ff;overflow:auto}
+.editor:empty:before{content:attr(data-placeholder);color:rgba(234,242,255,0.45)}
+.card-footer{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;border-top:1px solid rgba(255,255,255,0.02)}
+.meta-right button{margin-left:8px}
+.btn-outline{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);padding:8px 12px;border-radius:8px}
+.btn-primary{background:linear-gradient(90deg,#00c6ff,#0072ff);border:none;padding:8px 14px;border-radius:10px;color:#041}
+.ai-chat{position:fixed;right:24px;bottom:24px;width:420px;max-width:92vw;height:68vh;background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));border-radius:14px;box-shadow:0 20px 60px rgba(2,6,23,0.6);display:flex;flex-direction:column;z-index:60;transform:translateY(20px);opacity:0;pointer-events:none;transition:all .25s ease}
+.ai-chat.open{transform:translateY(0);opacity:1;pointer-events:auto}
+/* Header spinner when AI is generating */
+.ai-chat.loading .ai-header::after{content:'';display:inline-block;width:16px;height:16px;margin-left:10px;border-radius:50%;border:2px solid rgba(255,255,255,0.12);border-top-color:#00d4ff;animation:spin 0.9s linear infinite}
+.ai-header{padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.02);display:flex;justify-content:space-between;align-items:center}
+.ai-messages{flex:1;padding:12px 16px;overflow:auto}
+.ai-messages .msg{margin-bottom:10px;padding:10px 12px;border-radius:12px;max-width:78%}
+.ai-messages .msg.user{background:rgba(0,150,255,0.12);align-self:flex-end}
+.ai-messages .msg.ai{background:rgba(255,255,255,0.04);align-self:flex-start}
+.ai-messages .msg.ai.typing{opacity:0.9;font-style:italic}
+.ai-form{display:flex;padding:12px;border-top:1px solid rgba(255,255,255,0.02)}
+.ai-form input{flex:1;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:#eaf2ff;margin-right:8px}
+.btn-send{background:linear-gradient(90deg,#7b61ff,#00d4ff);border:none;padding:8px 12px;border-radius:10px;color:#021}
+.close{background:transparent;border:none;color:var(--muted);font-size:16px}
+@media(max-width:900px){.cards-stack{width:92vw;height:56vh}.post-card{width:92vw;height:52vh}.ai-chat{right:8px;left:8px;width:auto;bottom:12px}}
+
+/* Active card loading highlight */
+.post-card.top-card.loading{box-shadow:0 30px 80px rgba(0,180,255,0.12),0 10px 40px rgba(0,120,255,0.08);transform:translateY(-6px) scale(1.01);border-color:rgba(0,180,255,0.12)}

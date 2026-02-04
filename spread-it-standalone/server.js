@@ -842,6 +842,133 @@ app.get('/create', (req, res) => {
   });
 });
 
+// New composer UI (Standalone) - stack cards + AI chat popup
+app.get('/composer', (req, res) => {
+  res.render('composer', {
+    title: 'Composer - Spread It',
+    user: req.session.user
+  });
+});
+
+// Simple chat endpoint (non-streaming)
+app.post('/api/ai-chat', express.json(), async (req, res) => {
+  try {
+    const prompt = (req.body && req.body.prompt) ? String(req.body.prompt) : '';
+    if (!prompt) return res.status(400).json({ error: 'Prompt missing' });
+
+    const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+
+    const response = await openai.chat.completions.create({
+      model: model,
+      messages: [
+        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'user', content: prompt }
+      ],
+      max_tokens: 800,
+      temperature: 0.7
+    });
+
+    const text = response.choices && response.choices[0] && response.choices[0].message && response.choices[0].message.content
+      ? String(response.choices[0].message.content)
+      : '';
+
+    res.json({ reply: text });
+  } catch (e) {
+    console.error('AI chat error:', e && e.message ? e.message : e);
+    res.status(500).json({ error: 'AI chat error' });
+  }
+});
+
+// SSE streaming endpoint for AI (GET with query param `prompt`)
+app.get('/api/ai-stream', async (req, res) => {
+  const prompt = req.query.prompt ? String(req.query.prompt) : '';
+  if (!prompt) return res.status(400).json({ error: 'Prompt missing' });
+
+  // Headers for SSE
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders && res.flushHeaders();
+
+  // Helper to send SSE data
+  const send = (data) => {
+    try {
+      res.write(`data: ${data}\n\n`);
+    } catch (err) {
+      console.warn('SSE write failed:', err && err.message);
+    }
+  };
+
+  // Attempt real streaming with OpenAI if supported, otherwise fallback to chunking full reply
+  (async () => {
+    try {
+      // Attempt streaming call
+      const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+      let attemptedStream = false;
+
+      if (openai && typeof openai.chat === 'object' && typeof openai.chat.completions.create === 'function') {
+        try {
+          const streamResp = await openai.chat.completions.create({
+            model: model,
+            messages: [
+              { role: 'system', content: 'You are a helpful assistant.' },
+              { role: 'user', content: prompt }
+            ],
+            max_tokens: 800,
+            temperature: 0.7,
+            stream: true
+          });
+
+          // If the client library returns an async iterable
+          if (streamResp[Symbol.asyncIterator]) {
+            attemptedStream = true;
+            for await (const part of streamResp) {
+              // Attempt to extract text chunk
+              const chunkText = (part && part.choices && part.choices[0] && (part.choices[0].delta?.content || part.choices[0].message?.content)) || '';
+              if (chunkText) send(chunkText.replace(/\n/g, '\\n'));
+            }
+          }
+        } catch (streamErr) {
+          console.warn('OpenAI streaming not available, falling back:', streamErr && streamErr.message);
+        }
+      }
+
+      if (!attemptedStream) {
+        // Fallback: non-streaming call then send incremental chunks
+        const resp = await openai.chat.completions.create({
+          model: model,
+          messages: [
+            { role: 'system', content: 'You are a helpful assistant.' },
+            { role: 'user', content: prompt }
+          ],
+          max_tokens: 800,
+          temperature: 0.7
+        });
+
+        const full = resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content
+          ? String(resp.choices[0].message.content)
+          : '';
+
+        // Split into reasonable chunks (sentences) and stream them
+        const chunks = full.match(/[^\.\!\?]+[\.\!\?]?/g) || [full];
+        for (const c of chunks) {
+          send(c.trim().replace(/\n/g, '\\n'));
+          // Small pause so client sees progressive text
+          await new Promise(r => setTimeout(r, 180));
+        }
+      }
+
+      // Signal end
+      res.write('event: end\ndata: {}\n\n');
+      res.end();
+
+    } catch (err) {
+      console.error('AI stream error:', err && err.message ? err.message : err);
+      try { res.write('event: error\ndata: {}\n\n'); res.end(); } catch (e) {}
+    }
+  })();
+});
+
 app.get('/smart-share', (req, res) => {
     const { image, video, title, text, source } = req.query;
     res.render('smart-share', {
