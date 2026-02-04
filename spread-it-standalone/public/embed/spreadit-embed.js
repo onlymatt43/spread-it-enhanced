@@ -3,7 +3,7 @@
   // Configuration
   var composerBase = (window.SpreadIt && window.SpreadIt.composerBase) || 'https://spread-it-enhanced.onrender.com';
   
-  console.log('🚀 Spread It Embed: Loaded (v2.1-FIXED - No Typos). Scanning for media...');
+  console.log('🚀 Spread It Embed: Loaded (v2.2-FORCED-UPDATE - No Typos). Scanning for media...');
 
   // Modal logic (unchanged)
   function ensureModal(){
