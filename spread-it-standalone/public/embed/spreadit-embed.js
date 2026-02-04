@@ -39,7 +39,17 @@
 
     var btn = document.createElement('a');
     btn.className='spreadit-overlay-btn';
-    btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg> Spread It`;
+    
+    // Resume the "Active Logo" look: Use the branded video/logo
+    var logoUrl = composerBase + '/assets/logo-video-spread-it.mp4';
+    
+    // Structure: Circular Logo + Text (expandable or just iconic)
+    btn.innerHTML = `
+        <div style="width:24px;height:24px;border-radius:50%;overflow:hidden;flex-shrink:0;background:#000;border:1px solid rgba(255,255,255,0.3)">
+            <video src="${logoUrl}" autoplay loop muted playsinline style="width:100%;height:100%;object-fit:cover;display:block"></video>
+        </div>
+        <span>Spread It</span>
+    `;
     
     // Modern Floating Style
     btn.style.cssText = `
@@ -49,22 +59,22 @@
         z-index: 9999;
         display: inline-flex;
         align-items: center;
-        gap: 6px;
-        padding: 8px 14px;
-        background: rgba(10, 10, 10, 0.6);
+        gap: 8px;
+        padding: 6px 12px 6px 6px; /* Less padding left for logo */
+        background: rgba(10, 10, 10, 0.75);
         backdrop-filter: blur(8px);
         border: 1px solid rgba(255,255,255,0.15);
-        border-radius: 20px;
+        border-radius: 30px;
         color: white;
         font-family: system-ui, -apple-system, sans-serif;
         font-size: 13px;
-        font-weight: 500;
+        font-weight: 600;
         cursor: pointer;
         text-decoration: none;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        opacity: 0;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        opacity: 0; 
         transform: translateY(-5px);
-        transition: all 0.2s ease;
+        transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     `;
 
     // Show on parent hover
