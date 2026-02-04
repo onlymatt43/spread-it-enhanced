@@ -62,15 +62,26 @@
             <span class="p-icon <%= p %>"></span> 
             <span class="p-name"><%= p.charAt(0).toUpperCase()+p.slice(1) %></span>
         </div>
+        
+        <!-- VISUAL PREVIEW CONTAINER -->
         <div class="social-preview theme-dark p-<%= p %>" style="<%= (!configured[p]) ? 'opacity:0.75; filter:grayscale(1);' : '' %>">
-            <div class="sp-body">
-               <div class="sp-text-preview" contenteditable="true">...</div>
-            </div>
-            <% if(p === 'tiktok') { %>
-               <div class="tiktok-overlay-lite">
-                   <div class="tk-desc">Legende TikTok...</div>
-               </div>
+            
+            <% if ((p === 'instagram') || (p === 'tiktok')) { %>
+                <!-- FORMAT VERTICAL / FULL -->
+                <div class="sp-full-media">
+                   <!-- Image de fond injectée ici par JS -->
+                   <div class="sp-overlay-text">
+                       <div class="sp-text-preview" contenteditable="true">...</div>
+                   </div>
+                </div>
+            <% } else { %>
+                <!-- FORMAT FEED (Texte + Media) -->
+                <div class="sp-feed-layout">
+                    <div class="sp-text-preview" contenteditable="true" style="padding: 10px; font-size: 13px;">...</div>
+                    <div class="sp-media-block" style="height: 140px; background-color: #222; background-size: cover; background-position: center;"></div>
+                </div>
             <% } %>
+
         </div>
         <div class="mini-actions">
            <button class="btn-xs ghost action-copy" onclick="copyToClipboard(this)">Copier</button>
@@ -202,16 +213,28 @@
                         // AUTHENTICATED & HAS CONTENT
                         previewEl.innerText = content;
                         
-                        // Apply Image Background from Metadata if available
-                         if(window.CURRENT_POSTER) {
-                            const bodyEl = card.querySelector('.sp-body');
-                            if(bodyEl) {
-                                bodyEl.style.backgroundImage = `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.7)), url('${window.CURRENT_POSTER}')`;
-                                bodyEl.style.backgroundSize = 'cover';
-                                bodyEl.style.backgroundPosition = 'center';
-                                previewEl.style.textShadow = '0 1px 3px rgba(0,0,0,0.8)';
+                        // INJECT MEDIA (POSTER) IF AVAILABLE
+                        if(window.CURRENT_POSTER) {
+                            // Case 1: Full Background (Insta/TikTok)
+                            const fullMedia = card.querySelector('.sp-full-media');
+                            if(fullMedia) {
+                                fullMedia.style.backgroundImage = `url('${window.CURRENT_POSTER}')`;
+                                fullMedia.style.backgroundSize = 'cover';
+                                fullMedia.style.backgroundPosition = 'center';
                             }
+                            
+                            // Case 2: Feed Block (FB/Twitter/LI)
+                            const mediaBlock = card.querySelector('.sp-media-block');
+                            if(mediaBlock) {
+                                mediaBlock.style.backgroundImage = `url('${window.CURRENT_POSTER}')`;
+                                mediaBlock.style.display = 'block';
+                            }
+                        } else {
+                            // No media? Hide media block for feed to save space
+                             const mediaBlock = card.querySelector('.sp-media-block');
+                             if(mediaBlock) mediaBlock.style.display = 'none';
                         }
+
                     } else {
                         // NO CONTENT GENERATED
                         previewEl.innerText = "Pas de contenu généré pour ce réseau.";
