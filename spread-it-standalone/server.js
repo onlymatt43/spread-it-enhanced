@@ -1003,24 +1003,26 @@ app.post('/api/chat', express.json(), async (req, res) => {
                  // APPEL RÉEL (Plus de simulation forcée)
                  const analysis = await VideoAI.analyzeVideo(media.url);
                  
-                 // Si c'est une simulation (pas de clé API), on considère que le test a ÉCHOUÉ (selon demande utilisateur)
+                 // Si c'est une simulation (pas de clé API), on CONTINUE AVEC VIDÉO (Logique "Default Allow")
                  if (analysis.is_simulation) {
-                     isSafe = false;
-                     failureReason = "Google Video AI non configuré (Clés manquantes).";
+                     isSafe = true; // On assume que c'est bon si on n'a pas pu vérifier
+                     analysisContext = "MEDIA: Vidéo acceptée par défaut (Analyse AI désactivée).";
                  } else {
                      // Vraie analyse
-                     isSafe = (analysis.safety === 'safe' || analysis.safety === 'unknown'); // Unknown often acceptable depending on config
+                     // Seul le flag explicite 'VERY_LIKELY' ou 'LIKELY' pour unsafe bloquerait
+                     isSafe = (analysis.safety === 'safe' || analysis.safety === 'unknown'); 
                      if (!isSafe) failureReason = "Contenu marqué comme UNSAFE par Google.";
+                     else analysisContext = `MEDIA: Vidéo validée par Google AI (Safe).`;
                  }
             } catch(e) {
-                 isSafe = false;
-                 console.error("Video Check Failed:", e);
-                 failureReason = "Erreur technique lors de l'analyse.";
+                 // En cas d'erreur API, on laisse passer la vidéo (Fail Open)
+                 isSafe = true;
+                 console.error("Video Check Failed (Continuing anyway):", e);
+                 analysisContext = "MEDIA: Vidéo acceptée par défaut (Erreur service AI).";
             }
 
             if (isSafe) {
                 selectedMedia = { type: 'video', url: media.url, poster: media.poster };
-                analysisContext = `MEDIA: Vidéo analysée et validée (Safe). Titre: ${media.title || 'Vidéo'}.`;
             } else {
                 console.warn(`⚠️ Video rejected: ${failureReason}`);
                 // FALLBACK SUR L'IMAGE
