@@ -3,13 +3,13 @@ const session = require('express-session');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const fsp = fs.promises;
 const OpenAI = require('openai');
 const axios = require('axios');
 const cron = require('node-cron');
 const moment = require('moment');
 const vision = require('@google-cloud/vision');
 const sharp = require('sharp');
-const { MongoClient } = require('mongodb');
 const { fetchTrendingTopics } = require('./services/trending');
 const turso = require('./db/turso');
 const { TwitterApi } = require('twitter-api-v2'); // Ajout pour Twitter
@@ -18,7 +18,6 @@ const FormData = require('form-data'); // Ajout pour Facebook Upload
 // Nouveaux Services d'Intelligence
 const Strategist = require('./services/strategist');
 const VideoAI = require('./services/video-ai');
-const googleTrends = require('google-trends-api');
 
 // Configure layout if using ejs-layouts
 // const expressLayouts = require('express-ejs-layouts');
@@ -62,6 +61,23 @@ function isSet(val) {
   return !PLACEHOLDER_PATTERNS.some((re) => re.test(v));
 }
 
+function resolveChatModel() {
+  const fallback = 'gpt-4o-mini';
+  const configured = (process.env.OPENAI_MODEL || '').trim();
+  const chosen = configured || fallback;
+  const unsupported = ['gpt-4', 'gpt-3.5-turbo', 'gpt-3.5-turbo-16k'];
+
+  if (unsupported.includes(chosen.toLowerCase())) {
+    if (!resolveChatModel._warned) {
+      console.warn(`[Chat API] Modèle ${chosen} incompatible avec response_format=json_object. Bascule vers ${fallback}.`);
+      resolveChatModel._warned = true;
+    }
+    return fallback;
+  }
+
+  return chosen;
+}
+
 function validateEnv() {
   const issues = [];
 
@@ -75,12 +91,6 @@ function validateEnv() {
   const hasSA = isSet(process.env.GOOGLE_CLOUD_PRIVATE_KEY) && isSet(process.env.GOOGLE_CLOUD_CLIENT_EMAIL) && isSet(process.env.GOOGLE_CLOUD_PRIVATE_KEY_ID) && isSet(process.env.GOOGLE_CLOUD_PROJECT_ID);
   if (!hasVisionAPIKey && !hasSA) {
     issues.push('Missing Google Vision config (provide GOOGLE_CLOUD_VISION_KEY or Service Account fields: GOOGLE_CLOUD_PRIVATE_KEY, GOOGLE_CLOUD_CLIENT_EMAIL, GOOGLE_CLOUD_PRIVATE_KEY_ID, GOOGLE_CLOUD_PROJECT_ID).');
-  }
-
-  // MongoDB (optional)
-  const useMongo = (process.env.USE_MONGO || 'false') === 'true';
-  if (useMongo && !isSet(process.env.MONGODB_URI)) {
-    issues.push('USE_MONGO=true but MONGODB_URI is missing.');
   }
 
   // Facebook
@@ -178,29 +188,9 @@ if (!fs.existsSync(sessionBaseDir)) {
 let sessionStore;
 let sessionStoreName = 'memory';
 
-// Initialisation MongoDB & Strategist (optionnel via USE_MONGO)
-let db;
-let strategist;
-const USE_MONGO = (process.env.USE_MONGO || 'false') === 'true';
-
-if (USE_MONGO) {
-  const mongoClient = new MongoClient(process.env.MONGODB_URI || 'mongodb://localhost:27017');
-  async function connectDB() {
-    try {
-      await mongoClient.connect();
-      db = mongoClient.db(process.env.MONGODB_DB_NAME || 'spreadit_db');
-      strategist = new Strategist(db);
-      console.log("✅ MongoDB & Strategist Connected");
-    } catch (e) {
-      console.warn("⚠️ MongoDB Connection Failed. Strategist running in memory-only mode.");
-      strategist = new Strategist(null);
-    }
-  }
-  connectDB();
-} else {
-  strategist = new Strategist(null);
-  console.info("ℹ️ MongoDB disabled (USE_MONGO=false). Strategist running memory-only.");
-}
+// Strategist now runs memory-only (MongoDB deprecated)
+let strategist = new Strategist(null);
+console.info("ℹ️ MongoDB support désactivé. Strategist utilise uniquement le cache mémoire.");
 
 try {
   const SQLiteStore = require('connect-sqlite3')(session);
@@ -232,6 +222,30 @@ try {
 
 console.info(`Session store initialisé (${sessionStoreName}).`);
 
+// Lead storage helper (JSON file)
+const leadsStorePath = path.join(sessionBaseDir, 'leads.json');
+
+async function appendLeadToFile(lead) {
+  try {
+    let current = [];
+    if (fs.existsSync(leadsStorePath)) {
+      try {
+        const raw = await fsp.readFile(leadsStorePath, 'utf8');
+        current = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+      } catch (readErr) {
+        console.warn('[Leads] Impossible de lire leads.json, réinitialisation.', readErr.message || readErr);
+        current = [];
+      }
+    }
+
+    current.push({ ...lead, storedAt: new Date().toISOString() });
+    await fsp.writeFile(leadsStorePath, JSON.stringify(current, null, 2), 'utf8');
+  } catch (err) {
+    console.error('[Leads] Échec sauvegarde fichier:', err.message || err);
+    throw err;
+  }
+}
+
 // Configuration OpenAI
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -262,11 +276,7 @@ if (process.env.GOOGLE_CLOUD_VISION_KEY) {
   });
 }
 
-// Configuration MongoDB pour lead generation (Utilise l'instance globale déjà initialisée)
-/* 
- * mongoClient est déjà initialisé plus haut.
- * On s'assure juste que la référence est disponible si nécessaire.
- */
+// Stockage leads : géré via fichier JSON (MongoDB retiré)
 
 
 // Configuration multer pour l'upload de fichiers
@@ -807,8 +817,9 @@ app.post('/api/ai-edit', express.json(), async (req, res) => {
 
     const user = `LOCKED_TEXT (do not modify, do not include):\n${lockedText}\n\nCURRENT_AI_SECTION:\n${base}\n\nINSTRUCTION:\n${instruction}\n\nPROVEN_HASHTAGS:\n${topTags}\n\nReturn only the revised AI section.`;
 
+    const chatModel = resolveChatModel();
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: chatModel,
       messages: [
         { role: 'system', content: sys },
         { role: 'user', content: user }
@@ -889,10 +900,10 @@ app.post('/api/ai-chat', express.json(), async (req, res) => {
     const prompt = (req.body && req.body.prompt) ? String(req.body.prompt) : '';
     if (!prompt) return res.status(400).json({ error: 'Prompt missing' });
 
-    const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+    const chatModel = resolveChatModel();
 
     const response = await openai.chat.completions.create({
-      model: model,
+      model: chatModel,
       messages: [
         { role: 'system', content: 'You are a helpful assistant.' },
         { role: 'user', content: prompt }
@@ -1081,15 +1092,20 @@ app.post('/api/chat', express.json(), async (req, res) => {
             { role: 'user', content: `TEXTE UTILISATEUR : ${message}` }
         ];
 
+        const chatModel = resolveChatModel();
         const completion = await openai.chat.completions.create({
-            model: 'gpt-4',
-            messages: messages,
-            temperature: 0.8, // Increased creativity for newsjacking
-            response_format: { type: "json_object" }
+          model: chatModel,
+          messages,
+          temperature: 0.8, // Increased creativity for newsjacking
+          response_format: { type: "json_object" }
         });
 
-        let content = completion.choices[0].message.content;
-        console.log("[Chat API] OpenAI Response:", content.substring(0, 100) + "...");
+        let content = completion.choices?.[0]?.message?.content || "";
+        console.log("[Chat API] OpenAI Response:", (content || '').slice(0, 120) + "...");
+
+        if (!content) {
+          throw new Error("Réponse OpenAI vide.");
+        }
 
         // SANITIZE JSON (Strip Markdown if present)
         content = content.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -1135,7 +1151,7 @@ app.get('/api/ai-stream', async (req, res) => {
   (async () => {
     try {
       // Attempt streaming call
-      const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+      const model = resolveChatModel();
       let attemptedStream = false;
 
       if (openai && typeof openai.chat === 'object' && typeof openai.chat.completions.create === 'function') {
@@ -1560,22 +1576,18 @@ app.post('/api/leads', async (req, res) => {
       return res.status(400).json({ error: 'Email requis' });
     }
 
-    if (mongoClient) {
-      await mongoClient.connect();
-      const db = mongoClient.db('spread_it_leads');
-      const collection = db.collection('leads');
+    const leadPayload = {
+      email,
+      name: name || '',
+      source: source || 'connect_gate',
+      metadata: metadata || {},
+      createdAt: new Date().toISOString(),
+      status: 'active'
+    };
 
-      await collection.insertOne({
-        email: email,
-        name: name || '',
-        source: source || 'connect_gate',
-        metadata: metadata || {},
-        createdAt: new Date(),
-        status: 'active'
-      });
-    }
+    await appendLeadToFile(leadPayload);
 
-    res.json({ success: true, message: 'Lead capturé' });
+    res.json({ success: true, message: 'Lead capturé (stockage fichier)' });
   } catch (error) {
     console.error('Erreur capture lead:', error);
     res.status(500).json({ error: 'Erreur serveur' });
@@ -1769,7 +1781,7 @@ function censorText(text) {
 }
 
 async function improveContentWithAI(content, options, trending = {}) {
-  const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+  const model = resolveChatModel();
 
   // Trending enrichment
   const trendingHashtags = Array.isArray(trending.hashtags) ? trending.hashtags.slice(0, 20) : [];
@@ -1793,7 +1805,7 @@ async function improveContentWithAI(content, options, trending = {}) {
 **Instructions :**\n- Style : ${options.style || 'professionnel'}\n- Longueur : ${options.length || 'moyen'}\n- Mots-clés : ${options.keywords || 'aucun'}\n\n**Génère :**\n1) Contenu amélioré (corrige grammaire, respecte le sens original).\n2) Captions optimisées par plateforme (Facebook, Instagram, Twitter/X, LinkedIn, TikTok).\n3) Pour chaque plateforme, propose 5 hashtags triés par visibilité et une raison brève.\n4) Propose les meilleurs créneaux horaires pour publication par plateforme et une justification.\n5) Fournis une note SEO (0-100) et sentiment (positif/neutre/négatif).\n\n**Format JSON strict :**\n{\n  "improved_content": "...",\n  "captions": {"facebook":"...","instagram":"...","twitter":"...","linkedin":"...","tiktok":"..."},\n  "hashtags": {"facebook":["#..."],"instagram":["#..."],"twitter":["#..."],"linkedin":["#..."],"tiktok":["#..."]},\n  "optimal_times": {"facebook":["HH:MM"],"instagram":["HH:MM"]},\n  "sentiment":"positif|negatif|neutre",\n  "seo_score": 0\n}`;
 
   const response = await openai.chat.completions.create({
-    model: model,
+    model,
     messages: [{ role: 'user', content: prompt }],
     max_tokens: 2000,
     temperature: 0.6,
