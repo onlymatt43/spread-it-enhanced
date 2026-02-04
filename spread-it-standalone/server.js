@@ -1109,6 +1109,70 @@ app.post('/create', upload.single('content_file'), async (req, res) => {
   }
 });
 
+// --- OAUTH ROUTES ---
+
+// LinkedIn Auth Flow
+app.get('/auth/linkedin/login', (req, res) => {
+    const clientId = process.env.LINKEDIN_CLIENT_ID;
+    if (!clientId) return res.send("Missing LINKEDIN_CLIENT_ID in env");
+    
+    const redirectUri = (process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || `http://localhost:${PORT}`) + '/auth/linkedin/callback';
+    const scope = 'openid profile email w_member_social';
+    const state = 'spreadit_' + Date.now();
+    
+    const url = `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&state=${state}`;
+    res.redirect(url);
+});
+
+app.get('/auth/linkedin/callback', async (req, res) => {
+    const code = req.query.code;
+    if (!code) return res.send("No code provided");
+    
+    try {
+        const clientId = process.env.LINKEDIN_CLIENT_ID;
+        const clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
+        const redirectUri = (process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || `http://localhost:${PORT}`) + '/auth/linkedin/callback';
+        
+        const params = new URLSearchParams();
+        params.append('grant_type', 'authorization_code');
+        params.append('code', code);
+        params.append('redirect_uri', redirectUri);
+        params.append('client_id', clientId);
+        params.append('client_secret', clientSecret);
+
+        const response = await axios.post('https://www.linkedin.com/oauth/v2/accessToken', params, {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+        
+        const token = response.data.access_token;
+        // Fetch user URN
+        const profileRes = await axios.get('https://api.linkedin.com/v2/me', {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        const urn = `urn:li:person:${profileRes.data.id}`;
+        
+        // Save to session (temporary usage)
+        req.session.tokens = req.session.tokens || {};
+        req.session.tokens.linkedin = token;
+        req.session.linkedin_urn = urn;
+        
+        res.send(`
+            <div style="font-family: sans-serif; padding: 2rem; max-width: 600px; margin: 0 auto;">
+                <h1 style="color: #0077b5;">LinkedIn Connected Successfully!</h1>
+                <p><strong>Use these credentials in your Render Environment Variables:</strong></p>
+                <div style="background: #f0f0f0; padding: 1rem; border-radius: 5px;">
+                    <p><strong>LINKEDIN_ACCESS_TOKEN:</strong><br><code style="word-break: break-all;">${token}</code></p>
+                    <p><strong>LINKEDIN_USER_URN:</strong><br><code>${urn}</code></p>
+                </div>
+                <p style="margin-top: 1rem;"><a href="/" style="background: #0077b5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Return to Dashboard</a></p>
+            </div>
+        `);
+    } catch (e) {
+        console.error("LinkedIn Auth Error", e.response?.data || e.message);
+        res.status(500).send("LinkedIn Auth Failed: " + JSON.stringify(e.response?.data || e.message));
+    }
+});
+
 app.get('/share', (req, res) => {
   if (!req.session.currentContent) {
     return res.redirect('/create');
@@ -1714,29 +1778,156 @@ async function publishToInstagram(content, mediaPath = null, mediaType = null) {
 }
 
 async function publishToTwitter(content, mediaPath = null, mediaType = null) {
-  // Simulation - utiliser twitter-api-v2 en production
-  return {
-    success: true,
-    tweet_id: 'simulated_' + Date.now(),
-    url: 'https://twitter.com/status/simulated'
-  };
+  try {
+    const appKey = process.env.TWITTER_APP_KEY || process.env.TWITTER_API_KEY;
+    const appSecret = process.env.TWITTER_APP_SECRET || process.env.TWITTER_API_SECRET;
+    const accessToken = process.env.TWITTER_ACCESS_TOKEN;
+    const accessSecret = process.env.TWITTER_ACCESS_SECRET;
+
+    if (!appKey || !appSecret || !accessToken || !accessSecret) {
+      throw new Error('Twitter credentials missing');
+    }
+
+    const client = new TwitterApi({
+      appKey,
+      appSecret,
+      accessToken,
+      accessSecret,
+    });
+
+    const rwClient = client.readWrite;
+    let mediaId;
+
+    if (mediaPath) {
+      // Determine MIME type
+      const mimeType = mediaType === 'video' ? 'video/mp4' : 'image/jpeg'; // Simplification
+      mediaId = await rwClient.v1.uploadMedia(mediaPath, { mimeType });
+    }
+
+    const tweetPayload = {
+      text: content.captions?.twitter || content.improved
+    };
+
+    if (mediaId) {
+      tweetPayload.media = { media_ids: [mediaId] };
+    }
+
+    const tweet = await rwClient.v2.tweet(tweetPayload);
+    
+    return {
+      success: true,
+      tweet_id: tweet.data.id,
+      url: `https://twitter.com/i/web/status/${tweet.data.id}`
+    };
+
+  } catch (e) {
+    console.error('Twitter publish error:', e);
+    // Return mock success if simulation request (fallback) - REMOVE FOR PROD
+    if (process.env.NODE_ENV === 'development') {
+        return { success: true, tweet_id: 'mock_dev', url: 'https://twitter.com/mock' };
+    }
+    throw e;
+  }
 }
 
 async function publishToLinkedIn(content, mediaPath = null, mediaType = null) {
-  // Simulation - utiliser LinkedIn API en production
+  const accessToken = process.env.LINKEDIN_ACCESS_TOKEN;
+  const personUrn = process.env.LINKEDIN_USER_URN; // e.g., 'urn:li:person:...' or 'urn:li:organization:...'
+
+  if (!accessToken || !personUrn) {
+    throw new Error('LinkedIn configuration missing (LINKEDIN_ACCESS_TOKEN, LINKEDIN_USER_URN)');
+  }
+
+  let asset = null;
+
+  // 1. Upload Media if present (Simplified: Reference external if public, or use V2 Assets API)
+  // For standalone simple implementation, we'll try to stick to text + url if possible, 
+  // but if real media upload is needed, it requires "registerUpload" -> "upload" -> "verify".
+  // Let's implement the register/upload flow for Images. Video is harder.
+  
+  if (mediaPath && mediaType === 'image') {
+     try {
+       // Step 1: Register
+        const registerRes = await axios.post(
+            'https://api.linkedin.com/v2/assets?action=registerUpload',
+            {
+                "registerUploadRequest": {
+                    "recipes": ["urn:li:digitalmediaRecipe:feedshare-image"],
+                    "owner": personUrn,
+                    "serviceRelationships": [{
+                        "relationshipType": "OWNER",
+                        "identifier": "urn:li:userGeneratedContent"
+                    }]
+                }
+            },
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+
+        const uploadUrl = registerRes.data.value.uploadMechanism['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'].uploadUrl;
+        asset = registerRes.data.value.asset;
+
+        // Step 2: Upload
+        const fileData = fs.readFileSync(mediaPath);
+        await axios.put(uploadUrl, fileData, {
+            headers: { Authorization: `Bearer ${accessToken}` }
+        });
+     } catch (err) {
+         console.error("LinkedIn Media Upload Failed", err.response?.data || err.message);
+         // Continue without media? Or fail? Fail.
+         throw new Error("LinkedIn Media Upload Failed");
+     }
+  }
+
+  // 2. Create Post
+  const shareContent = {
+      "shareCommentary": {
+          "text": content.captions?.linkedin || content.improved
+      },
+      "shareMediaCategory": asset ? "IMAGE" : "NONE"
+  };
+
+  if (asset) {
+      shareContent.media = [
+          {
+              "status": "READY",
+              "description": { "text": "Image" },
+              "media": asset,
+              "title": { "text": "Smart Share Image" }
+          }
+      ];
+  }
+
+  const payload = {
+    "author": personUrn,
+    "lifecycleState": "PUBLISHED",
+    "specificContent": {
+        "com.linkedin.ugc.ShareContent": shareContent
+    },
+    "visibility": {
+        "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
+    }
+  };
+
+  const response = await axios.post(
+    'https://api.linkedin.com/v2/ugcPosts',
+    payload,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+
   return {
     success: true,
-    post_id: 'simulated_' + Date.now(),
-    url: 'https://linkedin.com/post/simulated'
+    post_id: response.data.id,
+    url: `https://www.linkedin.com/feed/update/${response.data.id}`
   };
 }
 
 async function publishToTikTok(content, mediaPath = null, mediaType = null) {
-  // Simulation - utiliser TikTok API en production
+  // TikTok Web Publishing API is complex and requires Business Account or Partner access.
+  // Keeping simulation for now unless specifically requested to reverse-engineer.
   return {
     success: true,
     video_id: 'simulated_' + Date.now(),
-    url: 'https://tiktok.com/@user/video/simulated'
+    url: 'https://tiktok.com/@user/video/simulated_pending_api_access'
   };
 }
 
@@ -1763,8 +1954,23 @@ async function optimizeImageForInstagram(imagePath) {
 }
 
 async function uploadToTempStorage(localPath) {
-  // Simulation - en production, uploader vers un service de stockage temporaire
-  return `https://temp-storage.example.com/${path.basename(localPath)}`;
+  try {
+      const fileName = path.basename(localPath);
+      const publicUploads = path.join(__dirname, 'public', 'uploads');
+      if (!fs.existsSync(publicUploads)) {
+          fs.mkdirSync(publicUploads, { recursive: true });
+      }
+      const destPath = path.join(publicUploads, fileName);
+      fs.copyFileSync(localPath, destPath);
+
+      // Construct URL
+      // Render sets RENDER_EXTERNAL_URL
+      const baseUrl = process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || 'http://localhost:3000';
+      return `${baseUrl}/uploads/${fileName}`;
+  } catch (e) {
+      console.error("Error exposing file", e);
+      throw e;
+  }
 }
 
 async function scheduleShare(platform, content, scheduleTime) {
