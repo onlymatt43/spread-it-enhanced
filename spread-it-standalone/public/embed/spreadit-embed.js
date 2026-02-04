@@ -83,19 +83,32 @@
         transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     `;
 
-    // Interaction: Play video on hover, Reset on leave
+    // Interaction: Show button when hovering the PARENT container (the video area)
+    parent.addEventListener('mouseenter', function(){
+        btn.style.opacity = '1';
+        btn.style.transform = 'translateY(0)';
+    });
+
+    parent.addEventListener('mouseleave', function(){
+        btn.style.opacity = '0';
+        btn.style.transform = 'translateY(-5px)';
+        // Ensure video stops if we leave both button and parent
+        var vid = btn.querySelector('.sp-logo-vid');
+        if(vid) {
+            vid.pause();
+            vid.currentTime = 0;
+        }
+    });
+
+    // Interaction: Play mini-video ONLY when hovering the BUTTON itself
     var vid = btn.querySelector('.sp-logo-vid');
     if(vid) {
         btn.addEventListener('mouseenter', function(){ 
-            btn.style.opacity = '1'; 
-            btn.style.transform = 'translateY(0)';
             vid.play().catch(function(e){/*ignore autoplay deny*/}); 
         });
         btn.addEventListener('mouseleave', function(){ 
-            btn.style.opacity = '0'; 
-            btn.style.transform = 'translateY(-5px)';
             vid.pause(); 
-            vid.currentTime = 0; // Reset to first frame
+            vid.currentTime = 0; 
         });
     }
 

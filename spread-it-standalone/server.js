@@ -911,6 +911,139 @@ app.post('/api/ai-chat', express.json(), async (req, res) => {
   }
 });
 
+// --- CONSTANTS ---
+const SYSTEM_PROMPT_CORRECTOR = "Tu es un éditeur de texte expert. Ton unique tâche est de corriger les fautes d'orthographe et de grammaire du texte suivant. Interdiction formelle de changer le ton, le style, l'argot ou la structure des phrases. Si le texte est déjà correct, renvoie-le tel quel. N'ajoute pas de guillemets ni de texte d'introduction.";
+
+// --- INFLUENCER DATABASE (STRICTE & VÉRIFIÉE) ---
+const INFLUENCER_DB = {
+    "video_editing": [
+        {"handle": "@waqasqazi", "name": "Waqas Qazi", "style": "Le maître absolu du Color Grading sur DaVinci Resolve."},
+        {"handle": "@petermckinnon", "name": "Peter McKinnon", "style": "Le roi du B-Roll et de la cinématique YouTube."},
+        {"handle": "@samkolder", "name": "Sam Kolder", "style": "Transitions folles, hyper-visuel, travel film."},
+        {"handle": "@benntk", "name": "Benn TK", "style": "Effets visuels réalistes et montage fluide."}
+    ],
+    "photography": [
+        {"handle": "@brandonwoelfel", "name": "Brandon Woelfel", "style": "Lumières néons, bokeh, photo de nuit créative."},
+        {"handle": "@7th.era", "name": "Liam Won", "style": "Cyberpunk, nuit, street photography tokyo vibes."},
+        {"handle": "@northborders", "name": "Mike Gray", "style": "Street photography brute et humoristique."}
+    ],
+    "tech_ai": [
+        {"handle": "@mkbhd", "name": "Marques Brownlee", "style": "La qualité de production tech ultime (8K, robot arms)."},
+        {"handle": "@mrwhosetheboss", "name": "Arun Maini", "style": "Gadgets futuristes et visuels très clean."},
+        {"handle": "@levelsio", "name": "Pieter Levels", "style": "Le 'solopreneur' IA par excellence, nomade digital."}
+    ],
+    "lifestyle_hustle": [
+        {"handle": "@garyvee", "name": "Gary Vaynerchuk", "style": "Motivation brute, 'arrete de te plaindre et bosse'."},
+        {"handle": "@alexhormozi", "name": "Alex Hormozi", "style": "Business scaling, gym aesthetic, casquette à l'envers."}
+    ]
+};
+
+function getGoalAccount(text) {
+    const t = text.toLowerCase();
+    let category = "tech_ai"; // Default
+
+    // Simple keyword mapping
+    if (t.includes('davinci') || t.includes('montage') || t.includes('cut') || t.includes('video') || t.includes('premiere')) category = "video_editing";
+    else if (t.includes('photo') || t.includes('lumiere') || t.includes('canon') || t.includes('sony')) category = "photography";
+    else if (t.includes('business') || t.includes('argent') || t.includes('mindset') || t.includes('travail')) category = "lifestyle_hustle";
+    
+    // Random safe pick from the category
+    const profiles = INFLUENCER_DB[category] || INFLUENCER_DB["tech_ai"];
+    const selected = profiles[Math.floor(Math.random() * profiles.length)];
+    return selected;
+}
+
+// --- NEW NEWSJACKING STRATEGY ---
+async function getNewsjackingContext(userText) {
+    try {
+        // 1. Get Real Trends (France/US mix for broader culture)
+        // Using google-trends-api already installed
+        const trends = await googleTrends.realTimeTrends({ geo: 'FR', category: 'h' }); // h = all categories
+        const trendData = JSON.parse(trends);
+        const story = trendData.storySummaries.trendingStories[0]; // Top 1 story
+        
+        const currentTrend = story 
+            ? `${story.articles[0].articleTitle} (Sujet: ${story.title})` 
+            : "L'engouement autour de l'IA générative et ChatGPT";
+
+        // 2. Strict Influencer Selection from DB
+        const influencer = getGoalAccount(userText);
+
+        return { currentTrend, influencer };
+
+    } catch (e) {
+        console.warn('Trends Fetch Error, using fallback:', e.message);
+        // Fallback Safe
+        return { 
+            currentTrend: "La sortie imminente de GTA VI", 
+            influencer: getGoalAccount(userText) // Still use strict DB even in fallback
+        };
+    }
+}
+
+app.post('/api/chat', express.json(), async (req, res) => {
+    try {
+        const { message, history = [], platforms = ['facebook', 'instagram', 'twitter', 'linkedin'] } = req.body;
+        
+        // 1. Détection d'intention
+        const isCorrectionRequest = message.toLowerCase().includes('corrige') || message.toLowerCase().includes('faute');
+
+        let systemPrompt = "";
+
+        // 2. FETCH NEWSJACKING CONTEXT (Dynamically)
+        const { currentTrend, influencer } = await getNewsjackingContext(message);
+
+        if (isCorrectionRequest) {
+             systemPrompt = SYSTEM_PROMPT_CORRECTOR;
+        } else {
+             // YOUR CUSTOM NEWSJACKING PROMPT ADAPTED FOR JSON OUTPUT
+             systemPrompt = `
+      Tu es un expert en Social Media qui maîtrise l'art du 'Newsjacking'.
+      
+      RÈGLES DU JEU :
+      1. TEXTE PRINCIPAL : Corrige seulement la grammaire du texte de l'utilisateur. Ne change pas le ton, ne le rends pas 'corporate'. Garde le côté humain et imparfait.
+      2. LE CLIN D'OEIL (VIBE) : À la fin, ajoute un paragraphe séparé (avec un emoji) qui fait un lien absurde ou drôle entre le texte de l'utilisateur et la TENDANCE ACTUELLE fournie (${currentTrend}).
+      3. GOAL ACCOUNT : Le "Goal Account" pour ce post est ${influencer.name} (${influencer.handle}). Son style est : "${influencer.style}". Tu DOIS mentionner ce compte (${influencer.handle}) pour créer de l'engagement (ex: "J'essaie de channeler l'énergie de ${influencer.handle}"). N'INVENTE PAS D'AUTRE COMPTE. UTILISE UNIQUEMENT CELUI-CI.
+      4. HASHTAGS : Mélange des tags sur le sujet du post ET des tags sur la tendance.
+
+      IMPORTANT POUR L'INTERFACE :
+      Tu dois répondre au format JSON STRICT :
+      {
+         "reply": "Ton commentaire court à l'utilisateur sur la stratégie adoptée (ex: 'J'ai surfé sur la vibe ${currentTrend} et tagué ${influencer.name}...')",
+         "cards": {
+             "facebook": "La version complète du post (Texte + Clin d'oeil + Mention + Tags)",
+             "instagram": "Version Instagram (plus visuelle, hashtags en bloc)",
+             "twitter": "Version courte (Punchline + Lien Trend + Tags)",
+             "linkedin": "Version plus structurée mais gardant le lien newsjacking"
+         }
+      }
+      `;
+        }
+
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            ...history,
+            { role: 'user', content: `TEXTE UTILISATEUR : ${message}` }
+        ];
+
+        const completion = await openai.chat.completions.create({
+            model: 'gpt-4',
+            messages: messages,
+            temperature: 0.8, // Increased creativity for newsjacking
+            response_format: { type: "json_object" }
+        });
+
+        const content = completion.choices[0].message.content;
+        const result = JSON.parse(content);
+
+        res.json(result);
+
+    } catch (e) {
+        console.error('Chat API Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // SSE streaming endpoint for AI (GET with query param `prompt`)
 app.get('/api/ai-stream', async (req, res) => {
   const prompt = req.query.prompt ? String(req.query.prompt) : '';

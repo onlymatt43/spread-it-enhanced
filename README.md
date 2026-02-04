@@ -4,11 +4,12 @@ Un système complet de création et partage de contenu assisté par IA, déploya
 
 ## Architecture
 
-Le système est composé de trois parties :
+Le système est composé de deux parties principales :
 
 1. **Spread It Standalone** (`spread-it-standalone/`) : Application web Node.js déployable sur Vercel/Render
 2. **Spread It Integration** (`spread-it-integration/`) : Plugin WordPress pour intégrer le service
-3. **Spread It Improved** (`spread-it-improved/`) : Version améliorée du plugin WordPress (structure préparée)
+
+> **Note** : Les anciennes versions et les projets en cours de développement (`spread-it`, `spread-it-improved`, etc.) ont été déplacés dans le dossier `_archive/`.
 
 ## Fonctionnalités Principales
 

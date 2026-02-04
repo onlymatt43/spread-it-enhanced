@@ -17,148 +17,185 @@
     </div>
   </header>
 
-  <main class="composer-stage">
-    <div class="cards-stack" id="cardsStack">
-      <div class="post-card underside card-4"></div>
-      <div class="post-card underside card-3"></div>
-      <div class="post-card underside card-2"></div>
-      <div class="post-card top-card card-1" id="activeCard">
-        <div class="card-header">
-          <div class="platforms">
-            <span class="badge p facebook">Facebook</span>
-            <span class="badge p twitter">Twitter</span>
-            <span class="badge p instagram">Instagram</span>
-            <span class="badge p linkedin">LinkedIn</span>
-          </div>
-          <div class="card-actions">
-            <button id="aiPolish" class="btn-accent">Améliorer (respecter le contenu)</button>
-            <button id="switchToChat" class="btn-ghost">Écrire en chat</button>
-          </div>
+  <main class="composer-stage chat-mode">
+    <!-- Chat Interface (Central) -->
+    <div class="chat-container">
+        <div class="chat-messages" id="chatMessages">
+            <!-- Welcome Message -->
+            <div class="message ai">
+                <div class="avatar">🤖</div>
+                <div class="bubble">
+                    Bonjour ! Je suis votre assistant Spread It. <br>
+                    Écrivez-moi simplement votre idée de post, ou collez un texte brut. Je vais l'analyser, l'optimiser pour chaque réseau social et vous proposer les meilleures versions.
+                </div>
+            </div>
+            
+            <!-- Cards will be injected here dynamically by AI -->
         </div>
 
-        <div class="card-body">
-          <div id="postEditor" class="editor" contenteditable="true" data-placeholder="Écrivez votre post ici — l'IA corrigera la grammaire et respectera votre contenu."></div>
+        <div class="chat-input-area">
+            <textarea id="userPrompt" class="chat-textarea" placeholder="Ex: Rédige un post sur le lancement de la nouvelle collection..." rows="1"></textarea>
+            <button id="sendMessage" class="btn-send">Envoyer ➤</button>
         </div>
+    </div>
 
-        <div class="card-footer">
-          <div class="meta-left">Draft • <span id="charCount">0</span> caractères</div>
-          <div class="meta-right">
-            <button id="previewBtn" class="btn-outline">Aperçu</button>
-            <button id="publishBtn" class="btn-primary">Publier</button>
+    <!-- Hidden Container for generated cards (moved into chat stream logically) -->
+    <div id="hidden-structure" style="display:none;">
+    <!-- Original editor structure kept for logic binding but hidden -->
+      <div class="cards-stack" id="cardsStack">
+        <div class="post-card top-card card-1" id="activeCard">
+          <div class="card-body">
+            <div id="postEditor" class="editor" contenteditable="true"></div>
           </div>
         </div>
       </div>
     </div>
   </main>
 
-  <!-- Platform cards: Real-time visual previews -->
-  <section class="platform-cards" id="platformCards">
+  <!-- Platform cards template for Chat Injection -->
+  <template id="platformCardsTemplate">
+    <div class="platform-grid">
     <% const platforms = ['facebook','instagram','twitter','linkedin','tiktok']; %>
     <% platforms.forEach(function(p){ %>
-      <article class="platform-wrapper" data-platform="<%= p %>">
-        
-        <!-- Toolbar: Functional Controls -->
-        <div class="platform-toolbar">
-            <div class="left">
-                <label class="toggle-platform"><input type="checkbox" class="platform-select" value="<%= p %>" checked> <span class="p-name"><%= p.charAt(0).toUpperCase()+p.slice(1) %></span></label>
-                <% if (typeof configured !== 'undefined' && !configured[p]) { %>
-                    <% if (p === 'linkedin') { %>
-                        <a href="/auth/linkedin/login" target="_blank" class="status-link disconnected" title="Connecter le compte">🔗 Connecter</a>
-                    <% } else { %>
-                        <span class="status-badge error" title="Missing credentials">⚠ Connecter</span>
-                    <% } %>
-                <% } %>
-            </div>
-            <div class="right">
-                <button class="btn-xs ghost improve-card">✨ IA Polish</button>
-            </div>
+      <article class="platform-wrapper mini-card" data-platform="<%= p %>">
+        <div class="platform-header">
+            <span class="p-icon <%= p %>"></span> 
+            <span class="p-name"><%= p.charAt(0).toUpperCase()+p.slice(1) %></span>
         </div>
-
-        <!-- Visual Preview: Reflects REAL status -->
         <div class="social-preview theme-dark p-<%= p %>" style="<%= (!configured[p]) ? 'opacity:0.75; filter:grayscale(1);' : '' %>">
-            <% if(p !== 'tiktok') { %>
-            <div class="sp-header">
-                <div class="sp-avatar">
-                    <!-- Gray avatar if disconnected -->
-                    <img src="https://ui-avatars.com/api/?name=<%= configured[p] ? 'User' : '?' %>&background=<%= configured[p] ? '007bff' : '555' %>&color=fff" alt="">
-                </div>
-                <div class="sp-meta">
-                    <div class="sp-name">
-                        <% if(configured[p]) { %>
-                            <%= (typeof user !== 'undefined' && user && user.name) ? user.name : 'Utilisateur Connecté' %> 
-                            <span class="verified-badge">✔</span>
-                        <% } else { %>
-                            Non Connecté
-                        <% } %>
-                    </div>
-                    <div class="sp-sub">
-                        <% if(configured[p]) { %>
-                            <%= p.charAt(0).toUpperCase()+p.slice(1) %> Officiel • À l'instant
-                        <% } else { %>
-                            Configuration requise
-                        <% } %>
-                    </div>
-                </div>
-                <div class="sp-menu">•••</div>
-            </div>
-            <% } %>
-
             <div class="sp-body">
-                <!-- Text Area (Acting as Post Content) -->
-                <!-- Order is controlled by CSS per platform (Insta: Media first) -->
-                <div class="sp-text-content">
-                    <textarea class="platform-caption inputs-invisible" data-platform="<%= p %>" placeholder="<%= configured[p] ? ('Votre légende pour ' + p + '...') : 'Connectez ce compte pour éditer...' %>" <%= !configured[p] ? 'disabled' : '' %>></textarea>
-                    <div class="platform-hashtags" data-platform="<%= p %>"></div>
-                </div>
-                
-                <!-- Media Area -->
-                <div class="sp-media platform-card-media" data-platform="<%= p %>">
-                    <!-- Media injected by JS -->
-                </div>
-
-                <% if(p === 'tiktok') { %>
-                    <!-- TikTok Overlay UI -->
-                    <div class="tiktok-overlay">
-                        <div class="tiktok-side">
-                           <div class="tt-icon">♥</div>
-                           <div class="tt-icon">💬</div>
-                           <div class="tt-icon">↪</div>
-                        </div>
-                        <div class="tiktok-bottom">
-                           <div class="tk-name"><%= configured[p] ? '@utilisateur' : '@inconnu' %></div>
-                           <div class="tk-desc"><%= configured[p] ? 'Votre caption...' : 'Compte non connecté' %></div>
-                           <div class="tk-sound">♫ Son Original</div>
-                        </div>
-                    </div>
-                <% } %>
+               <div class="sp-text-preview" contenteditable="true">...</div>
             </div>
-
-            <% if(p !== 'tiktok') { %>
-            <div class="sp-footer">
-                <% if(p==='twitter'){ %> <span class="act">💬 2</span> <span class="act">?? 5</span> <span class="act">♥ 12</span> <span class="act">ll 300</span> <% } %>
-                <% if(p==='facebook'){ %> <div class="fb-acts"><span class="act">👍 J'aime</span> <span class="act">💬 Commenter</span> <span class="act">↪ Partager</span></div> <% } %>
-                <% if(p==='linkedin'){ %> <div class="ln-acts"><span class="act">👍 J'aime</span> <span class="act">💬 Commenter</span> <span class="act">♻ Republier</span> <span class="act">Envoyer</span></div> <% } %>
-                <% if(p==='instagram'){ %> <div class="ig-acts"><span class="act">♥</span> <span class="act">💬</span> <span class="act">✈</span> <span class="spacer"></span> <span class="act">🔖</span></div> <div class="ig-likes">1,234 J'aime</div> <% } %>
-            </div>
+            <% if(p === 'tiktok') { %>
+               <div class="tiktok-overlay-lite">
+                   <div class="tk-desc">Legende TikTok...</div>
+               </div>
             <% } %>
         </div>
-
+        <div class="mini-actions">
+           <button class="btn-xs ghost action-copy" onclick="copyToClipboard(this)">Copier</button>
+        </div>
       </article>
     <% }); %>
-  </section>
-
-  <aside class="ai-chat" id="aiChat">
-    <div class="ai-header">
-      <strong>Assistant AI</strong>
-      <button id="closeChat" class="close">✕</button>
     </div>
-    <div class="ai-messages" id="aiMessages" aria-live="polite"></div>
-    <form id="aiForm" class="ai-form">
-      <input type="text" id="aiInput" placeholder="Demandez: 'Crée un thread inspirant sur IA'" autocomplete="off">
-      <button type="submit" class="btn-send">Envoyer</button>
-    </form>
-  </aside>
+  </template>
 
-  <script src="/js/composer.js"></script>
-</body>
-</html>
+  <!-- REPLACED OLD SCRIPT WITH CHAT LOGIC -->
+  <script>
+    // Pass server-side config to client
+    const USER_CONFIG = JSON.parse('<%- JSON.stringify(configured || {}) %>');
+    
+    // Auto-resize textarea
+    const tx = document.getElementById('userPrompt');
+    tx.addEventListener("input", function(){
+      this.style.height = 'auto';
+      this.style.height = (this.scrollHeight) + 'px';
+    });
+
+    // Simple script to handle Chat logic -> UI
+    document.getElementById('sendMessage').addEventListener('click', handleSend);
+    tx.addEventListener('keydown', (e) => {
+        if(e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSend();
+        }
+    });
+
+    async function handleSend(){
+        const input = document.getElementById('userPrompt');
+        const txt = input.value.trim();
+        if(!txt) return;
+
+        // User Message
+        addMessage('user', txt);
+        input.value = '';
+        input.style.height = 'auto';
+
+        // AI Loading State
+        const loadingId = addMessage('ai', '<span class="typing-dots">...</span>');
+
+        try {
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    message: txt,
+                    // Send contextual info if needed
+                    platforms: Object.keys(USER_CONFIG)
+                })
+            });
+
+            if(!response.ok) throw new Error("Erreur réseau");
+
+            const data = await response.json(); // Expecting { reply, cards }
+            
+            // 1. Update text reply
+            document.querySelector(`#${loadingId} .bubble`).innerHTML = data.reply || "Voici les résultats :";
+            
+            // 2. Inject Cards if present
+            if (data.cards && Object.keys(data.cards).length > 0) {
+                const template = document.getElementById('platformCardsTemplate');
+                const clone = template.content.cloneNode(true);
+                
+                // Update each card in the clone
+                clone.querySelectorAll('.platform-wrapper').forEach(card => {
+                    const platform = card.dataset.platform;
+                    const content = data.cards[platform];
+                    const isConfigured = USER_CONFIG[platform];
+
+                    const previewEl = card.querySelector('.sp-text-preview');
+                    const copyBtn = card.querySelector('.action-copy');
+
+                    if (!isConfigured) {
+                        // NOT AUTHENTICATED
+                        card.classList.add('locked'); // Add visual style for locked
+                        previewEl.innerText = "Connexion requise pour voir le contenu optimisé.";
+                        previewEl.style.opacity = "0.5";
+                        previewEl.style.fontStyle = "italic";
+                        // Change copy button to connect button
+                        copyBtn.innerText = "Se connecter";
+                        copyBtn.classList.remove('ghost');
+                        copyBtn.classList.add('accent');
+                        copyBtn.onclick = () => window.open(`/auth/${platform}/login`, '_blank');
+                    } else if (content) {
+                        // AUTHENTICATED & HAS CONTENT
+                        previewEl.innerText = content;
+                        // Add hashtags highlight if needed
+                    } else {
+                        // NO CONTENT GENERATED
+                        previewEl.innerText = "Pas de contenu généré pour ce réseau.";
+                    }
+                });
+                
+                const msgContainer = document.getElementById(loadingId);
+                msgContainer.appendChild(clone);
+            }
+            
+            // Scroll
+            const container = document.getElementById('chatMessages');
+            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+
+        } catch (e) {
+            document.querySelector(`#${loadingId} .bubble`).innerHTML = "Désolé, une erreur est survenue : " + e.message;
+        }
+    }
+
+    function addMessage(type, html) {
+        const id = 'msg-' + Date.now();
+        const div = document.createElement('div');
+        div.className = `message ${type}`;
+        div.id = id;
+        div.innerHTML = `
+            ${type === 'ai' ? '<div class="avatar">🤖</div>' : ''}
+            <div class="bubble">${html}</div>
+        `;
+        document.getElementById('chatMessages').appendChild(div);
+        return id;
+    }
+    
+    function copyToClipboard(btn) {
+        // ... (Logic handled inline for simplicity or separated)
+        // Note: The click handler in the template calls this, but we overrode it in JS for logic
+    }
+  </script>
+
