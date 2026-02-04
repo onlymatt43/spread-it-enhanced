@@ -1091,8 +1091,20 @@ app.post('/api/chat', express.json(), async (req, res) => {
             response_format: { type: "json_object" }
         });
 
-        const content = completion.choices[0].message.content;
-        const result = JSON.parse(content);
+        let content = completion.choices[0].message.content;
+        console.log("[Chat API] OpenAI Response:", content.substring(0, 100) + "...");
+
+        // SANITIZE JSON (Strip Markdown if present)
+        content = content.replace(/```json/g, '').replace(/```/g, '').trim();
+
+        let result;
+        try {
+            result = JSON.parse(content);
+        } catch (jsonError) {
+            console.error("[Chat API] JSON Parse Error:", jsonError);
+            console.error("[Chat API] Raw Content:", content);
+            throw new Error("Erreur de format de réponse AI (JSON invalide).");
+        }
 
         res.json(result);
 
