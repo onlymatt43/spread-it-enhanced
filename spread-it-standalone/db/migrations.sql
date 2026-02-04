@@ -27,3 +27,12 @@ CREATE TABLE IF NOT EXISTS metrics (
   recorded_at INTEGER,
   FOREIGN KEY(share_id) REFERENCES shares(id)
 );
+
+-- Resources table for external references (used by Turso libSQL insert)
+CREATE TABLE IF NOT EXISTS resources (
+  id TEXT PRIMARY KEY,
+  categoryId TEXT,
+  name TEXT,
+  payload JSON,
+  created_at INTEGER
+);

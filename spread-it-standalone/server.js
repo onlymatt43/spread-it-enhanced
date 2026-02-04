@@ -1206,6 +1206,45 @@ app.get('/api/reports/experiment/:id', async (req, res) => {
   }
 });
 
+// Endpoint: insert a resource into Turso DB with categoryId = 'SOCIAL MEDIA'
+app.post('/api/turso/resource', express.json(), async (req, res) => {
+  try {
+    const { id, name, payload } = req.body || {};
+    if (!id || !name) return res.status(400).json({ error: 'id and name required' });
+
+    const now = Date.now();
+    const categoryId = 'SOCIAL MEDIA';
+
+    // First attempt: libSQL (Turso cloud) if configured
+    if (process.env.TURSO_LIBSQL_URL && process.env.TURSO_LIBSQL_TOKEN) {
+      try {
+        const { createClient } = require('@libsql/client');
+        const client = createClient({ url: process.env.TURSO_LIBSQL_URL, auth: { token: process.env.TURSO_LIBSQL_TOKEN } });
+        await client.execute(
+          'INSERT OR REPLACE INTO resources (id, categoryId, name, payload, created_at) VALUES (?, ?, ?, ?, ?)',
+          [id, categoryId, name, JSON.stringify(payload || {}), now]
+        );
+        return res.json({ success: true, method: 'libsql' });
+      } catch (e) {
+        console.warn('libSQL insert failed, falling back to local turso:', e && e.message ? e.message : e);
+      }
+    }
+
+    // Fallback: use local Turso/SQLite wrapper
+    try {
+      turso.run('INSERT OR REPLACE INTO resources (id, categoryId, name, payload, created_at) VALUES (?,?,?,?,?)', [id, categoryId, name, JSON.stringify(payload || {}), now]);
+      return res.json({ success: true, method: 'turso-sqlite' });
+    } catch (e) {
+      console.error('turso insert error:', e && e.message ? e.message : e);
+      return res.status(500).json({ error: 'db insert failed' });
+    }
+
+  } catch (err) {
+    console.error('resource endpoint error:', err && err.message ? err.message : err);
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
 // API pour capture de leads (Connect Gate)
 app.post('/api/leads', async (req, res) => {
   try {
