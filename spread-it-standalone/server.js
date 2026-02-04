@@ -47,7 +47,8 @@ const runningOnRender = process.env.RENDER === 'true';
 const cookieSecure = process.env.SESSION_COOKIE_SECURE
   ? process.env.SESSION_COOKIE_SECURE === 'true'
   : runningOnRender;
-const cookieSameSite = process.env.SESSION_COOKIE_SAMESITE || 'lax';
+// If running on Render (HTTPS), default SameSite to 'none' to allow iframe usage on Vercel
+const cookieSameSite = process.env.SESSION_COOKIE_SAMESITE || (runningOnRender ? 'none' : 'lax');
 // Note: env validation is invoked after helpers are defined below.
 
 
