@@ -283,3 +283,20 @@ body.composer-dark {
 .platform-wrapper.locked {
     opacity: 0.9;
 }
+
+/* Ensure Grid for Chat Cards */
+.platform-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+    width: 100%;
+}
+.platform-wrapper.mini-card {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+.mini-actions {
+    display: flex; justify-content: flex-end; padding: 8px 0;
+}
