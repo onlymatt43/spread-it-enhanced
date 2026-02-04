@@ -957,14 +957,19 @@ function getGoalAccount(text) {
 // --- NEW NEWSJACKING STRATEGY ---
 async function getNewsjackingContext(userText) {
     try {
-        // 1. Get Real Trends (France/US mix for broader culture)
+        // 1. Get Daily Trends (More stable than RealTime)
         // Using google-trends-api already installed
-        const trends = await googleTrends.realTimeTrends({ geo: 'FR', category: 'h' }); // h = all categories
+        const trends = await googleTrends.dailyTrends({ geo: 'FR' }); 
         const trendData = JSON.parse(trends);
-        const story = trendData.storySummaries.trendingStories[0]; // Top 1 story
         
-        const currentTrend = story 
-            ? `${story.articles[0].articleTitle} (Sujet: ${story.title})` 
+        // Extract Top 1 Story from Daily Trends
+        const days = trendData.default.trendingSearchesDays;
+        const topStory = (days && days[0] && days[0].trendingSearches && days[0].trendingSearches[0]) 
+             ? days[0].trendingSearches[0] 
+             : null;
+
+        const currentTrend = topStory 
+            ? `${topStory.title.query} (Sujet chaud: ${topStory.articles[0] ? topStory.articles[0].title : topStory.title.query})` 
             : "L'engouement autour de l'IA générative et ChatGPT";
 
         // 2. Strict Influencer Selection from DB
