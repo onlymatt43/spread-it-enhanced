@@ -11,6 +11,7 @@ const vision = require('@google-cloud/vision');
 const sharp = require('sharp');
 const { MongoClient } = require('mongodb');
 const { fetchTrendingTopics } = require('./services/trending');
+const turso = require('./db/turso');
 const { TwitterApi } = require('twitter-api-v2'); // Ajout pour Twitter
 const FormData = require('form-data'); // Ajout pour Facebook Upload
 
@@ -369,6 +370,15 @@ app.use(session({
 // Configuration EJS
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+
+// Init Turso/SQLite DB (optional)
+try {
+  turso.init();
+  turso.migrate();
+  console.info('✅ Turso/SQLite DB initialized');
+} catch (e) {
+  console.warn('Turso DB not initialized:', e && e.message ? e.message : e);
+}
 
 // Routes
 
@@ -1137,6 +1147,62 @@ app.post('/share', async (req, res) => {
   } catch (error) {
     console.error('Erreur lors du partage:', error);
     res.status(500).json({ error: 'Erreur lors du partage' });
+  }
+});
+
+// Endpoint: Log a share (used by UI when publishing) -> stores record in Turso
+app.post('/api/share-log', express.json(), async (req, res) => {
+  try {
+    const payload = req.body || {};
+    const id = payload.id || `share_${Date.now()}`;
+    const experiment_id = payload.experiment_id || null;
+    const user_id = payload.user_id || null;
+    const platform = payload.platform || payload.platforms || 'unknown';
+    const original = payload.original_content || payload.content || '';
+    const ai = payload.ai_content || '';
+    const post_id = payload.post_id || '';
+    const now = Date.now();
+
+    // Insert experiment if provided
+    if (experiment_id) {
+      try { turso.run('INSERT OR IGNORE INTO experiments (id, name, created_at) VALUES (?,?,?)', [experiment_id, experiment_id, now]); } catch(e){}
+    }
+
+    turso.run(
+      `INSERT INTO shares (id, experiment_id, user_id, platform, original_content, ai_content, post_id, published_at, meta)
+       VALUES (?,?,?,?,?,?,?,?,?)`,
+      [id, experiment_id, user_id, platform, original, ai, post_id, now, JSON.stringify(payload.meta || {})]
+    );
+
+    res.json({ success: true, id });
+  } catch (e) {
+    console.error('share-log error:', e && e.message ? e.message : e);
+    res.status(500).json({ error: 'db error' });
+  }
+});
+
+// Simple report: aggregate metrics for an experiment
+app.get('/api/reports/experiment/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const shares = turso.all('SELECT id, platform, published_at, post_id FROM shares WHERE experiment_id = ?', [id]);
+    if (!shares || shares.length === 0) return res.json({ success: true, experiment_id: id, shares: [], aggregated: {} });
+
+    // Aggregate metrics stored in metrics table
+    const metrics = turso.all(
+      'SELECT platform, metric_key, SUM(metric_value) as total, COUNT(*) as count FROM metrics WHERE share_id IN (' + shares.map(s => `'${s.id}'`).join(',') + ') GROUP BY platform, metric_key'
+    );
+
+    const aggregated = {};
+    metrics.forEach(m => {
+      aggregated[m.platform] = aggregated[m.platform] || {};
+      aggregated[m.platform][m.metric_key] = { total: m.total, count: m.count };
+    });
+
+    res.json({ success: true, experiment_id: id, shares, aggregated });
+  } catch (e) {
+    console.error('report error:', e && e.message ? e.message : e);
+    res.status(500).json({ error: 'report error' });
   }
 });
 
