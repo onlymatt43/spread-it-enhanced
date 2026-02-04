@@ -62,15 +62,24 @@
     const es = new EventSource(url);
 
     let receivedAny = false;
+    let fullResponse = '';
+
     es.onmessage = (ev) => {
       // Append chunks to placeholder
       if (ev && ev.data) {
         receivedAny = true;
         // Remove typing hint class on first chunk
         if (aiPlaceholder.classList.contains('typing')) aiPlaceholder.classList.remove('typing');
+        
         // Replace escaped newlines
         const chunk = ev.data.replace(/\\n/g, '\n');
-        aiPlaceholder.textContent = (aiPlaceholder.textContent || '') + chunk;
+        fullResponse += chunk;
+        
+        // Display strictly text parts (hide potential JSON block in progress)
+        // Simple logic: if we see the start of a json block, we hide it from view
+        const displaySafe = fullResponse.split('```json')[0];
+        
+        aiPlaceholder.textContent = displaySafe;
         aiMessages.scrollTop = aiMessages.scrollHeight;
       }
     };
@@ -79,6 +88,59 @@
       aiChat.classList.remove('loading');
       if (activeCard) activeCard.classList.remove('loading');
       aiInput.disabled = false;
+      
+      // Check for JSON command block in fullResponse
+      const jsonMatch = fullResponse.match(/```json\s*([\s\S]*?)\s*```/);
+      if (jsonMatch && jsonMatch[1]) {
+        try {
+          const cmd = JSON.parse(jsonMatch[1]);
+          if (cmd.update_ui) {
+            console.log('🤖 AI Update Command:', cmd);
+            
+            // 1. Update Main Editor
+            if (cmd.main_content) {
+              editor.textContent = cmd.main_content;
+              updateCount();
+            }
+
+            // 2. Update Platform Cards
+            if (cmd.platforms) {
+              Object.keys(cmd.platforms).forEach(p => {
+                const text = cmd.platforms[p];
+                const ta = document.querySelector('.platform-caption[data-platform="'+p+'"]');
+                if (ta) ta.value = text;
+              });
+            }
+
+            // 3. Update Hashtags
+            if (cmd.hashtags) {
+               Object.keys(cmd.hashtags).forEach(p => {
+                 const tags = cmd.hashtags[p]; // String or Array
+                 const hnode = document.querySelector('.platform-hashtags[data-platform="'+p+'"]');
+                 if (hnode) {
+                   hnode.innerHTML = '';
+                   const tagList = Array.isArray(tags) ? tags : String(tags).split(' ');
+                   tagList.filter(t => t.trim()).forEach(t => {
+                     const b = document.createElement('span');
+                     b.className='tag';
+                     b.textContent = t.startsWith('#') ? t : '#'+t;
+                     hnode.appendChild(b);
+                   });
+                 }
+               });
+            }
+
+            // 4. Show advice logic if needed
+            if (cmd.advice) {
+              appendMsg(`💡 Conseil Stratégie: ${cmd.advice}`, 'system');
+            }
+            
+            appendMsg('✅ Cartes mises à jour automatiquement', 'system');
+          }
+        } catch (e) {
+            console.warn('Failed to parse AI JSON command', e);
+        }
+      }
     };
 
     es.addEventListener('end', () => { try { es.close(); } catch(e){}; finish(); });
