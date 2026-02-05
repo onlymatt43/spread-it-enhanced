@@ -421,37 +421,74 @@
     const sendBtn = document.getElementById('sendMessage');
     if(sendBtn) sendBtn.addEventListener('click', () => handleSend());
 
-    // --- AUTO-DETECT PREFILLED CONTENT (Video / Media) ---
+    // --- AUTO-DETECT PREFILLED CONTENT (Video / Media / Meta) ---
     document.addEventListener('DOMContentLoaded', () => {
         const params = new URLSearchParams(window.location.search);
         const prefill = params.get('prefill');
-        const videoUrl = params.get('video_url');
-        const posterUrl = params.get('poster');
+        const videoUrl = params.get('video_url'); // Priority 1
+        const posterUrl = params.get('poster');   // Priority 2
         const title = params.get('title');
         const description = params.get('description');
+        const keywords = params.get('keywords');
+        const author = params.get('author');
         
-        // Store poster globally for previews
-        if(posterUrl) window.CURRENT_POSTER = posterUrl;
-        if(videoUrl) window.CURRENT_VIDEO_URL = videoUrl;
-        if(title) window.CURRENT_TITLE = title;
+        // --- 1. MEDIA PRIORITY LOGIC ---
+        // Always try to use video first, if explicitly provided.
+        if(videoUrl && videoUrl !== 'undefined' && videoUrl !== 'null') {
+             window.CURRENT_VIDEO_URL = videoUrl;
+             // If we have a video, the poster is secondary (thumbnail), but useful for social cards that need static img
+             if(posterUrl) window.CURRENT_POSTER = posterUrl;
+        } else if (posterUrl && posterUrl !== 'undefined') {
+             // Fallback: No video, but we have a poster/thumbnail
+             window.CURRENT_POSTER = posterUrl;
+             window.CURRENT_VIDEO_URL = null; // Explicitly nullify
+        }
 
-        if(prefill && videoUrl) {
-            // Show a "System" message indicating detection with THUMBNAIL if available
-            let visualHtml = `🎥 Média détecté : <strong>${title || 'Vidéo'}</strong>`;
-            if(posterUrl) {
-                visualHtml += `<br><img src="${posterUrl}" style="max-width:100px; border-radius:8px; margin-top:8px; display:block;" alt="Thumbnail">`;
+        if(title) window.CURRENT_TITLE = title;
+        
+        // Store Meta for AI Context
+        window.CURRENT_METADATA = {
+            keywords: keywords || "",
+            author: author || "",
+            description: description || ""
+        };
+
+        if(prefill && (window.CURRENT_VIDEO_URL || window.CURRENT_POSTER || title)) {
+            // Show a "System" message indicating detection
+            let visualHtml = `🎥 Média détecté : <strong>${title || 'Source Externe'}</strong>`;
+            
+            // Show thumbnail/poster in chat
+            const thumbToShow = window.CURRENT_POSTER || (window.CURRENT_VIDEO_URL && !window.CURRENT_VIDEO_URL.endsWith('.mp4') ? window.CURRENT_VIDEO_URL : null);
+            
+            if(thumbToShow) {
+                visualHtml += `<br><img src="${thumbToShow}" style="max-width:120px; border-radius:8px; margin-top:8px; display:block; border:1px solid #333;" alt="Aperçu">`;
             }
-            visualHtml += `<br><span style="font-size:0.9em; opacity:0.8">Je prépare une stratégie de diffusion...</span>`;
+            
+            if(window.CURRENT_VIDEO_URL) visualHtml += `<div style="font-size:0.8em; color:#4ade80; margin-top:4px">✓ Vidéo chargée</div>`;
+            else if(window.CURRENT_POSTER) visualHtml += `<div style="font-size:0.8em; color:#fbbf24; margin-top:4px">✓ Image/Thumbnail chargée (mode image)</div>`;
+
+            visualHtml += `<br><span style="font-size:0.9em; opacity:0.8">Analyse des métadonnées & génération...</span>`;
             
             addMessage('ai', visualHtml);
             
             // Auto-trigger generation with richer context
-            let prompt = `Je veux partager cette vidéo : "${title || 'Nouvelle vidéo'}".\nLien: ${videoUrl}\n`;
-            if(description) prompt += `Contexte/Description: "${description}"\n`;
-            prompt += `Génère des posts engageants pour mes réseaux en utilisant la technique du Newsjacking. Utilise l'image fournie comme visuel si nécessaire.`;
+            let prompt = `Je veux partager ce contenu : "${title || 'Nouveau contenu'}".\n`;
+            if(window.CURRENT_VIDEO_URL) prompt += `Type: Vidéo\nLien: ${window.CURRENT_VIDEO_URL}\n`;
+            else prompt += `Type: Image/Article\n`;
+
+            if(window.CURRENT_METADATA.description) prompt += `\nDescription/Contexte: "${window.CURRENT_METADATA.description}"\n`;
+            if(window.CURRENT_METADATA.keywords) prompt += `Mots-clés / Tags (à utiliser): ${window.CURRENT_METADATA.keywords}\n`;
+            if(window.CURRENT_METADATA.author) prompt += `Auteur: ${window.CURRENT_METADATA.author}\n`;
+            
+            prompt += `\nINSTRUCTION: Génère des posts engageants pour mes réseaux. Inclus les mots-clés fournis dans les hashtags si pertinent. Adapte le ton au contenu.`;
             
             handleSend(prompt);
         }
+        
+        if (params.get('platforms')) {
+           // Handle platform selection updates if needed
+        }
+    });
         
         if (params.get('platforms')) {
            // Handle platform selection updates if needed
