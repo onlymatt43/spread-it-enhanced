@@ -84,7 +84,13 @@
 
         </div>
         <div class="mini-actions">
+           <!-- Copier le texte -->
            <button class="btn-xs ghost action-copy" onclick="copyToClipboard(this)">Copier</button>
+           
+           <!-- Boutons de partage direct -->
+           <button class="btn-xs action-share" onclick="window.SpreadIt.triggerShare(this, '<%= p %>')">
+               Partager 🚀
+           </button>
         </div>
       </article>
     <% }); %>
@@ -98,19 +104,82 @@
     
     // Auto-resize textarea
     const tx = document.getElementById('userPrompt');
-    tx.addEventListener("input", function(){
-      this.style.height = 'auto';
-      this.style.height = (this.scrollHeight) + 'px';
-    });
+    if(tx) {
+        tx.addEventListener("input", function(){
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+        });
+        tx.addEventListener('keydown', (e) => {
+            if(e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+            }
+        });
+    }
+
+    // Expose Share Trigger Globally
+    window.SpreadIt = window.SpreadIt || {};
+    window.SpreadIt.triggerShare = function(btn, platform) {
+        const card = btn.closest('.mini-card');
+        const textElement = card.querySelector('.sp-text-preview');
+        const content = textElement ? textElement.innerText : '';
+        
+        if (!content || content === '...') {
+            alert('Veuillez d\'abord générer du contenu avec l\'IA.');
+            return;
+        }
+
+        // Disable button to prevent double-click
+        const originalText = btn.innerText;
+        btn.innerText = 'Envoi...';
+        btn.disabled = true;
+
+        // Payload for smart-share endpoint
+        const payload = {
+            mediaUrl: window.CURRENT_VIDEO_URL || window.CURRENT_POSTER || null,
+            mediaType: window.CURRENT_VIDEO_URL ? 'video' : 'image',
+            caption: content,
+            platforms: [platform],
+            hashtags: [] 
+        };
+
+        fetch('/api/smart-share-submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                btn.innerText = '✅ Publié !';
+                btn.classList.add('success');
+            } else {
+                btn.innerText = 'Erreur';
+                // Show error details if available
+                let msg = data.message || 'Erreur inconnue';
+                if(data.errors && data.errors.length) msg += '\n' + data.errors[0].error;
+                alert('Echec du partage : ' + msg);
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            btn.innerText = 'Erreur Réseau';
+            alert('Impossible de contacter le serveur.');
+        })
+        .finally(() => {
+            // Re-enable button after delay if needed (or leave as Published)
+            setTimeout(() => {
+                if(btn.innerText !== '✅ Publié !') {
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                }
+            }, 3000);
+        });
+    };
 
     // Simple script to handle Chat logic -> UI
-    document.getElementById('sendMessage').addEventListener('click', () => handleSend());
-    tx.addEventListener('keydown', (e) => {
-        if(e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSend();
-        }
-    });
+    const sendBtn = document.getElementById('sendMessage');
+    if(sendBtn) sendBtn.addEventListener('click', () => handleSend());
 
     // --- AUTO-DETECT PREFILLED CONTENT (Video / Media) ---
     document.addEventListener('DOMContentLoaded', () => {
