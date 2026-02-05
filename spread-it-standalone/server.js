@@ -1241,42 +1241,9 @@ app.post('/api/chat', express.json(), async (req, res) => {
         if (isCorrectionRequest) {
              systemPrompt = SYSTEM_PROMPT_CORRECTOR;
         } else {
-             systemPrompt = `
-      Tu es un expert en Social Media "Newsjacking" pour Spread It.
-      
-      CONTEXTE MEDIA : ${analysisContext}
-      
-      RÈGLES FONDAMENTALES :
-      1. CONTENU UTILISATEUR : Le texte fourni est la base absolue. Si l'utilisateur donne beaucoup de détails ou d'explications, respecte scrupuleusement ces instructions. Ton rôle est de structurer et optimiser, pas d'inventer.
-      2. TENDANCE : Lie le sujet à la tendance actuelle : ${currentTrend}.
-      3. INFLUENCEUR : Mentionne obligatoirement ${influencer.name} (@${influencer.handle}) dans le style "${influencer.style}".
-      4. BRANDING : N'oublie pas que le post inclura un petit logo "Spread It" en filigrane pour la publicité.
-      5. GRAMMAIRE/TON : Garde un ton humain, authentique, voire imparfait. Fuis le phrasé robotique.
-      
-      INSTRUCTION UX (SHOWROOM) :
-      - Le média (vidéo ou image) est affiché DANS LES CARTES SOCIALES "cards" (Showroom) pour prévisualisation.
-      - Il NE DOIT PAS être traité comme une pièce jointe au chat.
-      - Dans "reply", donne uniquement du conseil stratégique. Ne dis pas "Voici la vidéo".
-      
-      FORMATAGE VARIABLE (ADAPTATION STRICTE PAR CARTE) :
-      - Facebook : Format "Storytelling" accepté. Texte plus long (si le contenu le justifie), paragraphes aérés, usage modéré d'emojis.
-      - Instagram : Priorité au visuel. Légende engageante mais concise, bloc de hashtags séparé.
-      - Twitter : Punchline immédiate. Moins de 280 caractères, hashtags intégrés au texte.
-      - LinkedIn : Ton expert/pro. Structure : Accroche -> Développement -> Leçon -> Question ouverte.
-      
-      FORMAT JSON STRICT :
-      {
-         "reply": "Conseil stratégique bref (ex: Pourquoi cet angle newsjacking fonctionne avec ce visuel).",
-         "cards": {
-             "facebook": "Post complet FB...",
-             "instagram": "Légende Insta (visuel fort)...",
-             "twitter": "Tweet percutant...",
-             "linkedin": "Post LinkedIn structuré...",
-             "tiktok": "Script/Description TikTok..."
-         },
-         "mediaUsed": ${JSON.stringify(selectedMedia || null)} 
-      }
-      `;
+             // Utilisation du Stratège pour le prompt système unifié (Manifesto V2)
+             const strategist = new Strategist(null);
+             systemPrompt = strategist.generateChatPrompt(analysisContext, currentTrend, influencer, selectedMedia);
         }
 
         const messages = [
