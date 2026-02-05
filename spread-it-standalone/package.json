@@ -6,13 +6,15 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "build": "echo 'No build step required'",
+    "build": "npm rebuild",
     "test": "jest"
   },
   "dependencies": {
     "@google-cloud/video-intelligence": "^5.2.0",
     "@google-cloud/vision": "^4.0.2",
+    "@libsql/client": "^0.6.0",
     "axios": "^1.6.2",
+    "better-sqlite3": "^9.4.0",
     "canvas": "^2.11.2",
     "connect-sqlite3": "^0.9.13",
     "crypto": "^1.0.1",

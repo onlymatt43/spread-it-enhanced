@@ -754,10 +754,14 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
                 });
 
                 // B. SAUVEGARDE PERMANENTE (Secours SQLite/Turso)
-                // Garantit l'enregistrement même si le Stratégist est en "memory-only"
+                // C'est ici qu'on garantit que ça "enregistre" vraiment dans le disque dur local
                 try {
                     const backupId = `auto_${Date.now()}_${result.platform}`;
-                    const metaData = { mediaUrl, mediaType, hashtags };
+                    const metaData = {
+                        mediaUrl,
+                        mediaType,
+                        hashtags
+                    };
                     
                     turso.run(
                         `INSERT INTO shares (id, experiment_id, user_id, platform, original_content, ai_content, post_id, published_at, meta)
