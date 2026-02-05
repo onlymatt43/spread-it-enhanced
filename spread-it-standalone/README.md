@@ -1,125 +1,83 @@
-# Spread It - Standalone
+# 🚀 Spread It - Standalone (v2.0 "Manifesto Edition")
 
-Une application web moderne pour créer, améliorer, analyser et partager du contenu avec l'IA sur les réseaux sociaux.
+**L'Arme Absolue pour la Domination des Réseaux Sociaux (Style OnlyMatt).**
 
-## Fonctionnalités
+Spread It est une application d'automatisation intelligente qui combine **Newsjacking**, **Stratégie Hybride** et **IA Provocatrice** pour gérer vos publications sur Facebook, Instagram, LinkedIn et Twitter (X).
 
-- **Création & Amélioration IA** : Génération et amélioration de texte avec GPT-4
-- **Analyse de Vision** : Analyse intelligente d'images avec Google Cloud Vision (labels, textes, logos)
-- **Tendances en temps réel** : Détection des sujets chauds sur les réseaux pour inspirer votre contenu
-- **Galerie de Médias** : Gestion intégrée des images et médias
-- **Système de Leads** : Capture et gestion de prospects (MongoDB)
-- **Partage Multi-plateforme** : Facebook, Twitter, LinkedIn, Instagram, et support expérimental TikTok
-- **Optimisation d'images** : Redimensionnement et formatage automatique avec Sharp
-- **Modération Automatique** : Filtrage de contenu via Google Perspective/Vision
-- **Sessions Robustes** : Gestion de session persistante (SQLite/Fichiers)
-- **API pour intégration** : Points d'entrée pour CMS externes (WordPress)
+---
 
-## Architecture Technique
+## 🔥 Pourquoi c'est différent ?
 
-- **Backend** : Node.js + Express
-- **Base de données** : MongoDB (Leads, Données) + SQLite (Sessions)
-- **IA & Traitement** : OpenAI GPT-4, Google Cloud Vision
-- **Traitement d'image** : Sharp, Canvas
-- **Frontend** : EJS templates + Bootstrap 5 + JS Client
-- **Tâches de fond** : Node-cron pour la planification
+Ce n'est pas juste un "scheduler". C'est un **Stratège Numérique**.
+*   **Identité Forte "Manifesto"** : L'IA ne parle pas comme un robot. Elle parle franglais, elle est edgy, "dark & sexy", et utilise des *vibe checks*.
+*   **Newsjacking Automatique** : Elle scanne Google Trends en temps réel pour lier votre contenu à l'actualité mondiale (même absurdement).
+*   **Réseaux de "Goal Accounts"** : Elle connaît vos modèles (GaryVee, McKinnon, etc.) et s'en inspire ou les "challenge".
+*   **Authentification "Infinite Token"** : Système OAuth avancé qui maintient une connexion permanente avec Meta sans reconnexion horaire.
+*   **Base de Données Hybride** : Synchronisation *Dual-Write* entre SQLite local (rapide) et Turso Cloud (persistant & distribué).
 
-## Déploiement
+---
 
-### Prérequis
-- Node.js >= 18.0.0
-- Compte MongoDB (Atlas ou local)
-- Clés API (OpenAI, Google Cloud, Réseaux Sociaux)
+## 🛠 Installation Rapide
 
-### Sur Vercel
+### 1. Prérequis
+*   Node.js 18+
+*   Un compte Render ou Vercel
+*   Des comptes développeurs (Meta, Twitter, LinkedIn)
+*   Clé OpenAI (GPT-4)
 
-1. Clonez ce repository
-2. Copiez `.env.example` vers `.env` et remplissez les variables
-3. Installez les dépendances : `npm install`
-4. Déployez sur Vercel : `vercel --prod`
-
-### Sur Render/Production
-
-1. Créez un nouveau service Web
-2. Mettez en place les variables d'environnement
-3. Commande de build: `npm install`
-4. Commande de start: `npm start`
-
-## Configuration
-
-### Variables d'environnement
-
-Copiez `.env.example` vers `.env`. Voici les principales configurations :
-
-```env
-# Core & IA
-OPENAI_API_KEY=votre_clé
-GOOGLE_CLOUD_VISION_KEY=votre_clé_google
-Note: Google Credentials peuvent nécessiter un chemin de fichier ou un JSON stringifié
-
-# Base de Données
-MONGODB_URI=mongodb+srv://... (Pour les leads et données persistantes)
-SESSION_DB_NAME=sessions.sqlite
-
-# Sécurité & Session
-SESSION_SECRET=votre_secret_fort
-API_KEY=clé_pour_api_externe
-SESSION_COOKIE_SECURE=true (en production)
-
-# Réseaux Sociaux (Selon besoin)
-FACEBOOK_ACCESS_TOKEN=...
-TWITTER_API_KEY=...
-INSTAGRAM_ACCESS_TOKEN=...
-```
-
-### APIs requises
-
-- **OpenAI API** : Génération de texte
-- **Google Cloud Vision API** : Analyse d'images
-- **MongoDB Atlas** : Stockage de données
-- **APIs Réseaux Sociaux** : Graph API, Twitter V2, etc.
-
-## Utilisation
-
-### Interface Web
-
-1. **Dashboard** : Vue d'ensemble des tendances et accès rapide
-2. **Créer** : Outil de rédaction assistée et upload d'images avec analyse IA
-3. **Galerie** : Visualisation des médias disponibles
-4. **Partager** : Publication multi-canaux avec prévisualisation
-5. **Leads** : Suivi des interactions et prospects
-
-### API pour WordPress / Intégration
-
-L'endpoint principal `/api/create-post` permet d'envoyer du contenu depuis un site externe.
-Nouveaux endpoints :
-- `GET /api/leads` : Récupération des leads
-- `GET /api/gallery/:type` : Accès aux ressources média
-
-## Développement
-
+### 2. Installation Locale
 ```bash
-# Installation
+git clone <votre-repo>
+cd spread-it-standalone
 npm install
-
-# Développement (avec nodemon)
-npm run dev
-
-# Production
-npm start
-
-# Tests
-npm test
+node server.js
 ```
 
-## Sécurité
+### 3. Configuration (.env)
+Copiez `.env.example` en `.env` (ou `.env.local`).
+Variables critiques :
+*   `OPENAI_API_KEY`: Le cerveau.
+*   `FACEBOOK_ACCESS_TOKEN` / `INSTAGRAM_ACCESS_TOKEN`: Le token "User" longue durée (60 jours).
+*   `FACEBOOK_PAGE_ID` / `INSTAGRAM_BUSINESS_ID`: Les IDs cibles.
+*   `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN`: Pour la persistance Cloud.
 
-- Validation des entrées
-- Protection CSRF
-- Sanitisation du contenu
-- Modération automatique
-- Chiffrement des tokens API
+---
 
-## Licence
+## ⚡️ Fonctionnalités Clés
 
-MIT
+### 🧠 The Strategist (Le Cerveau)
+Le module `services/strategist.js` est le cœur du système.
+*   **Analyse Contextuelle** : Comprend si vous postez une vidéo ou une photo.
+*   **Persona Engine** : Applique le style "OnlyMatt" (Franglais, Broken Syntax, Edgy).
+*   **Vibe Check** : Ajoute une interprétation culturelle à chaque post.
+
+### 🎨 The Composer (L'UI)
+*   **Mockups Réalistes** : Prévisualisation exacte (Pixel Perfect) des posts FB, IG, X et LinkedIn (Dark Mode 2025).
+*   **Smart Upload** : Détection automatique des ratios (16:9 vs 9:16).
+*   **Validation Légale** : Pages intégrées (`/privacy`, `/terms`) pour satisfaire les audits Meta.
+
+---
+
+## 🔒 Sécurité & Légal
+
+L'application est "Compliance-Ready" pour Meta :
+*   Endpoint de suppression de données : `/data-deletion`
+*   Pas de stockage de mots de passe (Oauth Only).
+*   IP Restreinte possible (mais désactivée pour dev dynamique).
+
+---
+
+## 🚀 Déploiement (Render)
+
+1. Connectez votre GitHub à Render.
+2. Créez un **Web Service**.
+3. Build Command: `npm install`
+4. Start Command: `node server.js`
+5. Ajoutez vos Variables d'Environnement.
+6. **Magie.**
+
+---
+
+*© 2026 Only Matt - "Spread It" Proprietary System.*
+
+Pour la documentation technique complète, voir [SPREAD-IT-SYSTEM-BIBLE.md](SPREAD-IT-SYSTEM-BIBLE.md).
