@@ -10,8 +10,7 @@ INFLUENCER_DB = {
     "video_editing": [
         {"handle": "@waqasqazi", "name": "Waqas Qazi", "style": "Le maître absolu du Color Grading sur DaVinci Resolve."},
         {"handle": "@petermckinnon", "name": "Peter McKinnon", "style": "Le roi du B-Roll et de la cinématique YouTube."},
-        {"handle": "@samkolder", "name": "Sam Kolder", "style": "Transitions folles, hyper-visuel, travel film."},
-        {"handle": "@benntk", "name": "Benn TK", "style": "Effets visuels réalistes et montage fluide."}
+        {"handle": "@samkolder", "name": "Sam Kolder", "style": "Transitions folles, hyper-visuel, travel film."}
     ],
     "photography": [
         {"handle": "@brandonwoelfel", "name": "Brandon Woelfel", "style": "Lumières néons, bokeh, photo de nuit créative."},
@@ -19,13 +18,11 @@ INFLUENCER_DB = {
         {"handle": "@northborders", "name": "Mike Gray", "style": "Street photography brute et humoristique."}
     ],
     "tech_ai": [
-        {"handle": "@mkbhd", "name": "Marques Brownlee", "style": "La qualité de production tech ultime (8K, robot arms)."},
-        {"handle": "@mrwhosetheboss", "name": "Arun Maini", "style": "Gadgets futuristes et visuels très clean."},
-        {"handle": "@levelsio", "name": "Pieter Levels", "style": "Le 'solopreneur' IA par excellence, nomade digital."}
+        {"handle": "@mkbhd", "name": "Marques Brownlee", "style": "La qualité de production tech ultime."},
+        {"handle": "@levelsio", "name": "Pieter Levels", "style": "Le 'solopreneur' IA par excellence."}
     ],
     "lifestyle_hustle": [
-        {"handle": "@garyvee", "name": "Gary Vaynerchuk", "style": "Motivation brute, 'arrete de te plaindre et bosse'."},
-        {"handle": "@alexhormozi", "name": "Alex Hormozi", "style": "Business scaling, gym aesthetic, casquette à l'envers."}
+        {"handle": "@garyvee", "name": "Gary Vaynerchuk", "style": "Motivation brute."}
     ]
 }
 

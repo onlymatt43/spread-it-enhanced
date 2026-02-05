@@ -3,6 +3,27 @@ const moment = require('moment');
 const googleTrends = require('google-trends-api');
 const axios = require('axios');
 
+// --- GOAL ACCOUNT DB ---
+const INFLUENCER_DB = {
+    "video_editing": [
+        {"handle": "@waqasqazi", "name": "Waqas Qazi", "style": "Le maître absolu du Color Grading sur DaVinci Resolve."},
+        {"handle": "@petermckinnon", "name": "Peter McKinnon", "style": "Le roi du B-Roll et de la cinématique YouTube."},
+        {"handle": "@samkolder", "name": "Sam Kolder", "style": "Transitions folles, hyper-visuel, travel film."}
+    ],
+    "photography": [
+        {"handle": "@brandonwoelfel", "name": "Brandon Woelfel", "style": "Lumières néons, bokeh, photo de nuit créative."},
+        {"handle": "@7th.era", "name": "Liam Won", "style": "Cyberpunk, nuit, street photography tokyo vibes."},
+        {"handle": "@northborders", "name": "Mike Gray", "style": "Street photography brute et humoristique."}
+    ],
+    "tech_ai": [
+        {"handle": "@mkbhd", "name": "Marques Brownlee", "style": "La qualité de production tech ultime."},
+        {"handle": "@levelsio", "name": "Pieter Levels", "style": "Le 'solopreneur' IA par excellence."}
+    ],
+    "lifestyle_hustle": [
+        {"handle": "@garyvee", "name": "Gary Vaynerchuk", "style": "Motivation brute."}
+    ]
+};
+
 // Ce service agit comme le "Cerveau Stratégique"
 // Il combine l'analyse de marché, l'historique et les règles de plateforme.
 
@@ -13,12 +34,27 @@ class Strategist {
         this.marketCache = new Map(); // Cache pour les analyses de marché
         this.cacheExpiry = 30 * 60 * 1000; // 30 minutes
     }
+    
+    selectGoalAccount(content) {
+        let category = "tech_ai"; // Default
+        const lower = content.toLowerCase();
+        
+        if (['davinci', 'montage', 'cut', 'video', 'premiere', 'edit'].some(k => lower.includes(k))) category = "video_editing";
+        else if (['photo', 'lumiere', 'canon', 'sony', 'shot'].some(k => lower.includes(k))) category = "photography";
+        else if (['business', 'argent', 'mindset', 'travail', 'hustle'].some(k => lower.includes(k))) category = "lifestyle_hustle";
+
+        const potentials = INFLUENCER_DB[category] || INFLUENCER_DB["tech_ai"];
+        return potentials[Math.floor(Math.random() * potentials.length)];
+    }
 
     /**
      * Point d'entrée principal : Optimise le contenu pour une plateforme donnée
      * en prenant en compte les trends actuels et l'historique de l'utilisateur.
      */
     async optimizeForPlatform(content, mediaType, targetPlatform, action = 'create_post') {
+        
+        // 0. Identifier le "Goal Account" pour ce post
+        const goalAccount = this.selectGoalAccount(content);
         
         // 1. Récupérer les "Trends" du moment (VRAIES DONNÉES GOOGLE)
         let trends = [];
@@ -82,36 +118,46 @@ class Strategist {
                 FORMAT: #tag1 #tag2 #tag3 ... (rien d'autre)
             `;
         } else {
-            // MODE CRÉATION DE POST CLASSIQUE AVEC APPRENTISSAGE PROFOND
+            // MODE CRÉATION DE POST CLASSIQUE AVEC APPRENTISSAGE PROFOND (STRATÉGIE HYBRIDE)
             prompt = `
-                TU ES UN IMITATEUR DE GÉNIE QUI COPIE LES FORMULES GAGNANTES.
+                RÔLE: Tu es un expert Social Media qui applique la méthode "HYBRIDE".
                 
-                TON OBJECTIF:
-                Créer un post viral en COPIANT EXACTEMENT les patterns des posts qui ont explosé.
+                RÈGLES D'OR DE L'IDENTITÉ (MANIFESTE):
+                1. "High Fashion in the Wild" : Contraste entre le raffinement et la rudesse brute.
+                2. Authenticité Totale : Garde le texte utilisateur intact (ne touche pas à l'argot genre "Criss", "Frette", etc). Corrige juste les fautes graves.
+                3. Trend Surfing : Connecte le sujet du post à une tendance actuelle.
                 
-                DONNÉES DES POSTS PERFORMANTS ANALYSÉS:
-                - Structure gagnante la plus commune: ${Object.keys(topPerformers.commonPatterns?.topStructures || {}).sort((a,b) => (topPerformers.commonPatterns.topStructures[b] || 0) - (topPerformers.commonPatterns.topStructures[a] || 0))[0] || 'balanced'}
-                - Style dominant: ${Object.keys(topPerformers.commonPatterns?.topStyles || {}).sort((a,b) => (topPerformers.commonPatterns.topStyles[b] || 0) - (topPerformers.commonPatterns.topStyles[a] || 0))[0] || 'direct_address'}
-                - Longueur moyenne des posts réussis: ${Math.round(topPerformers.commonPatterns?.avgLength || 150)} caractères
-                - Ratio d'emojis dans les succès: ${(topPerformers.commonPatterns?.emojiRatio || 0.6) * 100}%
-                - Ratio de questions: ${(topPerformers.commonPatterns?.questionRatio || 0.4) * 100}%
-                - Ratio de CTA: ${(topPerformers.commonPatterns?.ctaRatio || 0.3) * 100}%
+                DONNÉES DU 'GOAL ACCOUNT' (INSPIRATION):
+                - Compte Cible: ${goalAccount.handle} (${goalAccount.name})
+                - Son Style: "${goalAccount.style}"
+                -> INSTRUCTION: Cite ou référence ce compte dans le post en disant que c'est une inspiration majeure pour ce contenu.
+                
+                INFOS TRENDS:
+                - Tendance du jour à hacker: "${trends[0] || 'Viral'}", "${trends[1] || 'Trending'}"
+                -> INSTRUCTION: Ajoute un bloc "VIBE CHECK" à la fin où tu fais un lien drôle ou absurde entre le contenu et cette tendance.
+                
+                DONNÉES TECH (ALGORITHME):
+                - Structure gagnante: ${Object.keys(topPerformers.commonPatterns?.topStructures || {}).sort((a,b) => (topPerformers.commonPatterns.topStructures[b] || 0) - (topPerformers.commonPatterns.topStructures[a] || 0))[0] || 'balanced'}
+                - Longueur cible: ${Math.round(topPerformers.commonPatterns?.avgLength || 150)} chars
+
+                TON STYLE (OBLIGATOIRE - NE PAS COMPROMETTRE):
+                - Ton: Brut, 'Raw', Franglais assumé (Québécois), Edgy.
+                - PAS de "Wow! Regardez ça!". C'est interdit.
+                - PAS d'emojis excessifs.
+
+                CONTENU INITIAL BRUT :
+                "${content}"
+
+                TA MISSION (OUTPUT FINAL):
+                Génère un post optimisé qui respecte à la lettre la structure suivante :
+                1. Le Corps du texte (Amélioré subtilement, mais garde l'âme brute).
+                2. "👠 Vibe Check :" (Le lien avec la tendance ${trends[0]}).
+                3. "🎯 Goal :" (La mention de ${goalAccount.handle}).
+                4. Les Hashtags (Mélange sujet et trends).
 
                 EXEMPLES DE POSTS QUI ONT MARCHÉ (À COPIER):
-                ${topPerformers.templates?.slice(0, 3).map(t => `"${t.content}" (${t.engagement}% engagement)`).join('\n') || 'Aucun exemple disponible'}
+                ${topPerformers.templates?.slice(0, 3).map(t => `"${t.content}"`).join('\n') || 'Aucun exemple'}
 
-                HASHTAGS PROUVÉS PERFORMANTS:
-                ${topPerformers.topHashtags?.slice(0, 15).map(h => h.tag).join(' ') || '#Viral #Trending'}
-
-                TON STYLE (OBLIGATOIRE):
-                - Ton: Amical mais Direct, Edgy, Sexy.
-                - Langue: Mélange naturel d'Anglais et de Français Québécois (Franglais cool).
-                - PAS d'enthousiasme corporatif ("Wow! Regardez ça!"). C'est cringe.
-                - PAS d'emojis excessifs. 1 ou 2 max (genre 🔥 ou 👀).
-                - Sois concis. Punchy.
-
-                CONTEXTE ACTUEL:
-                - Plateforme cible: ${targetPlatform} (Adapte la structure pour ça)
                 - Sujets Tendance: ${trends.join(', ')} (Source: ${trendsSource})
                 - Inspiration de la concurrence: ${competition.strategy_hint}
                 - Historique de succès: Style "${insights.bestStyle}" vers ${insights.bestTime}
