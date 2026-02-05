@@ -211,9 +211,11 @@
             <div class="account-status-overlay">🔴 Compte Facebook non connecté</div>
             <div class="mockup-content">
                 <div class="header">
-                    <div class="avatar"></div>
+                    <div class="avatar" style="position:relative;">
+                        <i class="fab fa-facebook" style="position:absolute; bottom:-4px; right:-4px; color:#1877f2; background:white; border-radius:50%; font-size:16px;"></i>
+                    </div>
                     <div class="meta">
-                        <span class="name">Votre Page</span>
+                        <span class="name">Facebook Page</span>
                         <div class="time">Just now · <i class="fas fa-globe-americas"></i></div>
                     </div>
                     <i class="fas fa-ellipsis-h" style="color:#b0b3b8"></i>
@@ -227,7 +229,7 @@
                 </div>
             </div>
             <div class="card-action-bar">
-                <button class="btn-share-real" onclick="window.SpreadIt.triggerShare(this, 'facebook')">Publier sur Facebook</button>
+                <button class="btn-share-real" onclick="window.SpreadIt.triggerShare(this, 'facebook')"><i class="fab fa-facebook-f"></i> Publier Facebook</button>
             </div>
         </article>
 
@@ -238,7 +240,7 @@
                 <div class="header">
                     <div class="header-left">
                         <div class="avatar"><div class="avatar-inner"></div></div>
-                        <span class="name">votre_compte</span>
+                        <span class="name">Instagram</span>
                     </div>
                     <i class="fas fa-ellipsis-h" style="color:white"></i>
                 </div>
@@ -261,7 +263,7 @@
                 </div>
             </div>
             <div class="card-action-bar">
-                <button class="btn-share-real" onclick="window.SpreadIt.triggerShare(this, 'instagram')">Publier sur Instagram</button>
+                <button class="btn-share-real" onclick="window.SpreadIt.triggerShare(this, 'instagram')"><i class="fab fa-instagram"></i> Publier Instagram</button>
             </div>
         </article>
 
@@ -270,9 +272,11 @@
             <div class="account-status-overlay">🔴 Compte LinkedIn non connecté</div>
             <div class="mockup-content">
                 <div class="header">
-                    <div class="avatar"></div>
+                    <div class="avatar" style="position:relative;">
+                        <i class="fab fa-linkedin" style="position:absolute; bottom:-4px; right:-4px; color:#0a66c2; background:white; border-radius:3px; font-size:16px;"></i>
+                    </div>
                     <div class="meta-col">
-                        <div class="name">Votre Profil</div>
+                        <div class="name">LinkedIn Profile</div>
                         <div class="role">Expert en Stratégie Digitale • Créateur de Contenu IA</div>
                         <div class="time">Juste maintenant • <i class="fas fa-globe-americas"></i></div>
                     </div>
@@ -288,7 +292,7 @@
                 </div>
             </div>
             <div class="card-action-bar">
-                <button class="btn-share-real" onclick="window.SpreadIt.triggerShare(this, 'linkedin')">Publier sur LinkedIn</button>
+                <button class="btn-share-real" onclick="window.SpreadIt.triggerShare(this, 'linkedin')"><i class="fab fa-linkedin-in"></i> Publier LinkedIn</button>
             </div>
         </article>
 
@@ -296,8 +300,65 @@
         <article class="mockup-card twitter-style" id="preview-twitter" data-platform="twitter">
             <div class="account-status-overlay">🔴 Compte Twitter/X non connecté</div>
             <div class="mockup-content">
-                <div class="avatar"></div>
+                <div class="avatar" style="background:#333 url('https://abs.twimg.com/sticky/default_profile_images/default_profile_400x400.png') center/cover;"></div>
                 <div class="right-col">
+                    <div class="header">
+                        <span class="name">Twitter / X</span>
+                        <span class="handle">@handle</span>
+                        <span class="dot">·</span>
+                        <span class="time">1m</span>
+                    </div>
+                    <div class="body post-text" contenteditable="true">En attente de contenu...</div>
+                    <div class="media-container"></div>
+                    <div class="footer">
+                        <div><i class="far fa-comment"></i> <span>0</span></div>
+                        <div><i class="fas fa-retweet"></i> <span>0</span></div>
+                        <div><i class="far fa-heart"></i> <span>0</span></div>
+                        <div><i class="far fa-chart-bar"></i> <span>0</span></div>
+                        <div><i class="fas fa-share"></i></div>
+                    </div>
+                </div>
+            </div>
+             <div class="card-action-bar">
+                <button class="btn-share-real" onclick="window.SpreadIt.triggerShare(this, 'twitter')"><i class="fab fa-x-twitter"></i> Tweeter</button>
+            </div>
+        </article>
+        
+        <!-- YOUTUBE SHORTS CARD (NEW) -->
+        <article class="mockup-card" id="preview-youtube" data-platform="youtube" style="background:#000; border:1px solid #333; border-radius:12px; overflow:hidden;">
+             <div class="account-status-overlay">🔴 Chaîne YouTube non connectée</div>
+             <div class="mockup-content" style="display:flex; flex-direction:column;">
+                <div class="header" style="padding:10px; display:flex; align-items:center; gap:10px;">
+                     <div class="avatar" style="width:32px; height:32px; background:#ff0000; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:10px;"><i class="fab fa-youtube"></i></div>
+                     <span class="name" style="font-weight:bold; font-size:14px;">YouTube Shorts</span>
+                </div>
+                <div class="media-area" style="position:relative; width:100%; aspect-ratio:9/16; background:#111; display:flex; align-items:center; justify-content:center;">
+                    <span style="color:#666;">Video Preview</span>
+                </div>
+                <div class="body post-text" style="padding:10px; font-size:14px; color:#fff;" contenteditable="true">Title / Caption...</div>
+             </div>
+             <div class="card-action-bar">
+                <button class="btn-share-real" onclick="window.SpreadIt.triggerShare(this, 'youtube')"><i class="fab fa-youtube"></i> Upload Short</button>
+            </div>
+        </article>
+                
+        <!-- TIKTOK CARD (NEW) -->
+        <article class="mockup-card" id="preview-tiktok" data-platform="tiktok" style="background:#000; border:1px solid #333; border-radius:12px; overflow:hidden;">
+             <div class="account-status-overlay">🔴 Compte TikTok non connecté</div>
+             <div class="mockup-content" style="display:flex; flex-direction:column;">
+                <div class="header" style="padding:10px; display:flex; align-items:center; gap:10px;">
+                     <div class="avatar" style="width:32px; height:32px; background:#000; border:1px solid #333; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:14px;"><i class="fab fa-tiktok"></i></div>
+                     <span class="name" style="font-weight:bold; font-size:14px;">TikTok</span>
+                </div>
+                <div class="media-area" style="position:relative; width:100%; aspect-ratio:9/16; background:#111; display:flex; align-items:center; justify-content:center;">
+                     <span style="color:#666;">Video Preview</span>
+                </div>
+                <div class="body post-text" style="padding:10px; font-size:14px; color:#fff;" contenteditable="true">Caption...</div>
+             </div>
+             <div class="card-action-bar">
+                <button class="btn-share-real" onclick="window.SpreadIt.triggerShare(this, 'tiktok')"><i class="fab fa-tiktok"></i> Post TikTok</button>
+            </div>
+        </article>
                     <div class="header">
                         <span class="name">You</span>
                         <span class="handle">@yourhandle</span>
@@ -525,9 +586,12 @@
 
     // --- UPDATED LOGIC FOR REALISTIC DECK ---
 
+    // 0. Inject Config
+    window.USER_CONFIG = <%- JSON.stringify(configured || {}) %>;
+
     // 1. Initialize Deck State based on Config
     document.addEventListener('DOMContentLoaded', () => {
-        const platforms = ['facebook', 'instagram', 'linkedin', 'twitter'];
+        const platforms = ['facebook', 'instagram', 'linkedin', 'twitter', 'tiktok', 'youtube'];
         platforms.forEach(p => {
             const card = document.getElementById(`preview-${p}`);
             if(!card) return;
@@ -572,7 +636,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     message: txt,
-                    platforms: Object.keys(USER_CONFIG),
+                    platforms: Object.keys(USER_CONFIG).filter(k => USER_CONFIG[k]), // Only enabled platforms
                     media: {
                         type: window.CURRENT_VIDEO_URL ? 'video' : (window.CURRENT_POSTER ? 'image' : null),
                         url: window.CURRENT_VIDEO_URL || window.CURRENT_POSTER,
@@ -592,7 +656,7 @@
             // Add AI Reply Log
             const replyDiv = document.createElement('div');
             replyDiv.className = 'message ai';
-            replyDiv.innerHTML = `<div class="bubble">${data.reply || "Previews mises à jour  !"}</div>`;
+            replyDiv.innerHTML = `<div class="bubble">${data.reply || "Previews mises à jour !"}</div>`;
             chatLog.appendChild(replyDiv);
 
             // UPDATE RIGHT DECK
@@ -606,27 +670,34 @@
                     if(textEl) textEl.innerText = data.cards[platform];
 
                     // Update Media (if present)
-                    const mediaArea = card.querySelector('.media-area');
+                    // Supports both .media-area and .media-container classes
+                    const mediaArea = card.querySelector('.media-area') || card.querySelector('.media-container');
+                    
                     if (mediaArea) {
-                        mediaArea.innerHTML = ''; // Clear
+                        mediaArea.innerHTML = ''; // Clear existing
                         const mediaType = data.mediaUsed?.type || (window.CURRENT_VIDEO_URL ? 'video' : 'image');
                         const mediaUrl = data.mediaUsed?.url || window.CURRENT_VIDEO_URL || window.CURRENT_POSTER;
 
                         if (mediaUrl) {
                             if (mediaType === 'video') {
-                                mediaArea.innerHTML = `<video src="${mediaUrl}" controls style="max-width:100%; max-height:100%"></video>`;
+                                // BETTER VIDEO TAG: Controls, PlaysInline, Loop, Poster
+                                // Adding muted autoplay for instant visual feedback on some browsers
+                                let posterAttr = window.CURRENT_POSTER ? `poster="${window.CURRENT_POSTER}"` : '';
+                                mediaArea.innerHTML = `<video src="${mediaUrl}" controls playsinline loop ${posterAttr} style="width:100%; height:100%; object-fit:cover; max-height:500px; display:block; background:#000;"></video>`;
                             } else {
-                                mediaArea.innerHTML = `<img src="${mediaUrl}" style="width:100%; height:auto;">`;
+                                mediaArea.innerHTML = `<img src="${mediaUrl}" style="width:100%; height:auto; display:block; object-fit:cover;">`;
                             }
                         } else if (platform === 'instagram' && !mediaUrl) {
-                             mediaArea.innerHTML = `<div style="padding:20px; text-align:center; color:red">⚠️ Média requis pour Instragram</div>`;
+                             mediaArea.innerHTML = `<div style="padding:20px; text-align:center; color:#ef4444; font-size:12px; border:1px dashed #ef4444; margin:10px;">⚠️ Un média est requis pour Instagram</div>`;
                         }
                     }
                 });
             }
             
         } catch (e) {
-            loaderDiv.innerHTML = `<div class="bubble" style="background:#450a0a; color:#fecaca">Erreur: ${e.message}</div>`;
+             console.error(e);
+             if(document.getElementById('ai-loader')) document.getElementById('ai-loader').remove();
+             addMessage('ai', `<span style="color:#ef4444">Erreur: ${e.message}</span>`);
         }
     }
 

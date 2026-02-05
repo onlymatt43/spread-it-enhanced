@@ -20,6 +20,7 @@ const { spawn } = require('child_process');
 // Nouveaux Services d'Intelligence
 const Strategist = require('./services/strategist');
 const VideoAI = require('./services/video-ai');
+const VideoUploader = require('./services/video-uploader');
 const googleTrends = require('google-trends-api');
 
 // Configure layout if using ejs-layouts
@@ -159,7 +160,9 @@ function formatForPlatform(platform, caption, hashtags) {
     instagram: { maxLen: 2200, maxTags: 25, sepLine: true },
     twitter: { maxLen: 240, maxTags: 4, sepLine: false },
     tiktok: { maxLen: 150, maxTags: 5, sepLine: false },
-    linkedin: { maxLen: 700, maxTags: 5, sepLine: false }
+    linkedin: { maxLen: 700, maxTags: 5, sepLine: false },
+    youtube: { maxLen: 100, maxTags: 3, sepLine: false },
+    youtube_shorts: { maxLen: 100, maxTags: 3, sepLine: false }
   };
 
   const r = rules[platform] || rules.facebook;
@@ -716,6 +719,7 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
                  return { success: true, platform, id: publishRes.data.id };
              }
 
+
              // --- LINKEDIN ---
              if (platform === 'linkedin') {
                  // Requires LinkedIn API setup which is complex (URNs, Assets).
@@ -725,6 +729,56 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
                 
                 // (Implementation omitted for brevity, would require 'author' URN and media upload flow)
                 return { success: true, platform, id: 'mock_linkedin_' + Date.now(), warning: "LinkedIn implementation pending" };
+             }
+
+             // --- YOUTUBE SHORTS (Natif) ---
+             if (platform === 'youtube' || platform === 'youtube_shorts') {
+                 if (mediaType !== 'video') {
+                     return { success: false, platform, error: "YouTube requires video media type" };
+                 }
+                 if (!process.env.YOUTUBE_REFRESH_TOKEN) {
+                     return { success: false, platform, error: "Missing YOUTUBE_REFRESH_TOKEN" };
+                 }
+
+                 try {
+                     // Convert string hashtags "#foo #bar" to array ["foo", "bar"]
+                     const tagsArray = platformHashtags
+                        ? platformHashtags.split(' ').map(t => t.replace('#', '')).filter(Boolean)
+                        : [];
+                     
+                     // Use caption as title (YouTube Shorts uses title heavily)
+                     // If title is too long, we might need to truncate
+                     const result = await VideoUploader.uploadYouTubeShorts(
+                         tempFilePath, 
+                         platformCaption, 
+                         platformCaption, // Description same as title/caption for Shorts
+                         tagsArray
+                     );
+                     return { success: true, platform: 'youtube', id: result.id, url: result.url };
+
+                 } catch (e) {
+                     return { success: false, platform, error: e.message };
+                 }
+             }
+
+             // --- TIKTOK (Natif) ---
+             if (platform === 'tiktok') {
+                 if (mediaType !== 'video') {
+                     return { success: false, platform, error: "TikTok requires video media type" };
+                 }
+                 if (!process.env.TIKTOK_ACCESS_TOKEN) {
+                     return { success: false, platform, error: "Missing TIKTOK_ACCESS_TOKEN" };
+                 }
+
+                 try {
+                     // TikTok caption includes hashtags
+                     const finalCaption = platformCaption + ' ' + platformHashtags;
+                     const result = await VideoUploader.uploadTikTok(tempFilePath, finalCaption);
+                     
+                     return { success: true, platform: 'tiktok', id: result.id, status: result.status };
+                 } catch (e) {
+                     return { success: false, platform, error: e.message };
+                 }
              }
              
              return { success: false, platform, error: "Platform not supported yet" };
@@ -981,6 +1035,7 @@ app.get('/', (req, res) => {
 // --- ROUTES LÉGALES (POUR FACEBOOK APP REVIEW) ---
 app.get('/privacy', (req, res) => res.render('privacy'));
 app.get('/terms', (req, res) => res.render('terms'));
+app.get('/reaction', (req, res) => res.render('reaction')); // New Reaction Mode
 app.get('/data-deletion', (req, res) => res.render('data_deletion'));
 
 app.get('/create', (req, res) => {
@@ -1030,6 +1085,30 @@ app.post('/api/ai-chat', express.json(), async (req, res) => {
   } catch (e) {
     console.error('AI chat error:', e && e.message ? e.message : e);
     res.status(500).json({ error: 'AI chat error' });
+  }
+});
+
+// --- NEW REACTION/NEWSJACKING ENDPOINT ---
+app.post('/api/analyze-reaction', express.json(), async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) {
+      return res.status(400).json({ error: 'URL manquante' });
+    }
+
+    // Instancier le stratège avec le client OpenAI global
+    const strategist = new Strategist(openai);
+    const result = await strategist.analyzeReaction(url);
+
+    if (result.error) {
+       // On renvoie 200 avec message d'erreur pour que le front puisse l'afficher proprement
+       return res.json({ error: result.error }); 
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('API Error /api/analyze-reaction:', error);
+    res.status(500).json({ error: 'Erreur interne du serveur lors de l\'analyse.' });
   }
 });
 

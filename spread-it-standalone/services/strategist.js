@@ -77,25 +77,27 @@ class Strategist {
       - ${analysisContext}
 
       RÈGLES UX STRICTES (POUR L'INTERFACE):
-      - Le média (vidéo/image) est affiché DANS LES CARTES SOCIALES "cards" pour prévisualisation.
+      - Le média (vidéo/image) est affiché DANS LES CARTES SOCIALES "cards".
       - Il NE DOIT PAS être traité comme une pièce jointe au chat.
-      - Dans "reply", donne uniquement du conseil stratégique avec ton ton "Franglais". Ne dis pas "Voici la vidéo", dis plutôt "Check ça, j'ai cooké un truc solid".
+      - Dans "reply", donne uniquement du conseil stratégique.
 
-      FORMATAGE VARIABLE (ADAPTATION PAR PLATEFORME):
-      - **Facebook :** Storytelling. On parle à matante ou aux amis d'école. Texte plus long accepté.
-      - **Instagram :** Visuel first. Légende courte, punchy. Hashtags en bas.
-      - **Twitter (X) :** Shitposting ou Value Bomb. Moins de 280 chars.
-      - **LinkedIn :** "Broetry" ou Expert. Structure : Accroche -> Leçon -> Question. (Mais garde le ton Franglais/Edgy, ne deviens pas corpo-boring).
+      FORMATAGE PAR PLATEFORME (ADAPTATION CRUCIALE):
+      - **Facebook :** Storytelling engageant. Début intrigant, texte moyen/long.
+      - **Instagram :** Visuel first. Légende courte & punchy. Hashtags en bloc à la fin.
+      - **Twitter (X) :** Shitposting ou Value Bomb. < 280 caractères. Pas de hashtags de boomer.
+      - **LinkedIn :** Expert mais pas chiant. "Broetry" ou Value. Structure: Accroche -> Leçon -> Question.
+      - **TikTok / Shorts :** CE SONT DES VIDÉOS. La "caption" est minuscule (max 100-150 caractères). Doit contenir des mots-clés SEO pour l'algo (#ForYou, #Vidéaste). Le ton doit être GEN Z / CHAOS.
 
-      FORMAT JSON STRICT (OBLIGATOIRE - NE RIEN AJOUTER D'AUTRE):
+      FORMAT JSON STRICT (OBLIGATOIRE):
       {
-         "reply": "Ton conseil stratégique en franglais (ex: 'Yo, ce shot est nuts...')",
+         "reply": "Ton conseil stratégique en franglais...",
          "cards": {
              "facebook": "Post complet FB...",
              "instagram": "Légende Insta...",
              "twitter": "Tweet...",
              "linkedin": "Post LinkedIn...",
-             "tiktok": "Script vidéo..."
+             "tiktok": "Caption TikTok courte + Tags...",
+             "youtube": "Titre Punchy + Tags (Shorts)..."
          },
          "mediaUsed": ${JSON.stringify(selectedMedia || null)} 
       }
@@ -1010,6 +1012,81 @@ class Strategist {
             timestamp: new Date(),
             source: 'real_market_data'
         };
+    }
+
+    /**
+     * Analyse une URL pour une réaction Newsjacking (Mode Réaction)
+     */
+    async analyzeReaction(url) {
+        // Import dynamique pour éviter les dépendances circulaires
+        const { scrapeArticle } = require('./news-scraper');
+        
+        console.log(`🕵️‍♂️ Analyzing Reaction for URL: ${url}`);
+        
+        // 1. Scraper le contenu
+        let article;
+        try {
+            article = await scrapeArticle(url);
+        } catch (e) {
+            return { error: `Impossible de lire l'article : ${e.message}` };
+        }
+        
+        // 2. Générer 3 angles d'attaque avec GPT-4o
+        const prompt = `
+            RÔLE : Tu es le Stratège Créatif "OnlyMatt". Ton style est Edgy, Franglais, Direct.
+            
+            TA MISSION : Analyser cet article et proposer 3 angles de réaction pour un post social media "Newsjacking".
+            
+            ARTICLE :
+            Titre: ${article.title}
+            Contenu (extrait): ${article.content.substring(0, 3000)}...
+            
+            TES 3 ANGLES (DOIVENT ÊTRE DISTINCTS) :
+            1. "D'ACCORD" (Validation) : Tu es 100% d'accord, mais tu ajoutes une nuance "expert".
+            2. "PAS D'ACCORD" (Controverse) : Tu attaques l'idée reçue. Tu dis que c'est de la marde ou dangereux.
+            3. "SARCASME / HUMOUR" : Tu tournes le truc au ridicule. C'est le "Vibe Check".
+            
+            FORMAT ATTENDU (JSON STRICT) :
+            {
+               "summary": "Résumé ultra-court de l'article en 1 phrase.",
+               "angles": [
+                  {
+                     "type": "agree",
+                     "label": "✅ L'Approche Validation",
+                     "hook": "Phrase d'accroche punchy pour ce post...",
+                     "content_idea": "Idée générale du développement..."
+                  },
+                  {
+                     "type": "disagree",
+                     "label": "❌ L'Approche Controverse",
+                     "hook": "Phrase d'accroche punchy...",
+                     "content_idea": "Idée générale..."
+                  },
+                  {
+                     "type": "sarcasm",
+                     "label": "🤡 L'Approche Vibe Check",
+                     "hook": "Phrase d'accroche punchy...",
+                     "content_idea": "Idée générale..."
+                  }
+               ],
+               "proven_hashtags": ["#Tag1", "#Tag2"]
+            }
+        `;
+        
+        try {
+            const completion = await this.openai.chat.completions.create({
+                model: "gpt-4o",
+                messages: [{ role: "system", content: prompt }],
+                response_format: { type: "json_object" },
+                temperature: 0.8
+            });
+            
+            const analysis = JSON.parse(completion.choices[0].message.content);
+            return { article, analysis };
+        } catch (e) {
+             console.error("GPT Error in Reaction Mode:", e);
+             return { error: "Erreur lors de l'analyse AI." };
+        }
     }
 
     /**
