@@ -978,6 +978,11 @@ app.get('/', (req, res) => {
   });
 });
 
+// --- ROUTES LÉGALES (POUR FACEBOOK APP REVIEW) ---
+app.get('/privacy', (req, res) => res.render('privacy'));
+app.get('/terms', (req, res) => res.render('terms'));
+app.get('/data-deletion', (req, res) => res.render('data_deletion'));
+
 app.get('/create', (req, res) => {
   res.redirect('/composer');
 });
@@ -2063,11 +2068,12 @@ async function publishToFacebook(content, mediaPath = null, mediaType = null) {
 }
 
 async function publishToInstagram(content, mediaPath = null, mediaType = null) {
-  const userId = process.env.INSTAGRAM_USER_ID;
-  const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
+  // Correction: Utiliser BUSINESS_ID (terme API) ou USER_ID (legacy)
+  const userId = process.env.INSTAGRAM_BUSINESS_ID || process.env.INSTAGRAM_USER_ID;
+  const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN;
 
   if (!userId || !accessToken || !mediaPath) {
-    throw new Error('Configuration Instagram manquante ou pas de média');
+    throw new Error(`Configuration Instagram manquante. (ID: ${userId ? 'OK' : 'MANQUANT'}, Token: ${accessToken ? 'OK' : 'MANQUANT'}, Media: ${mediaPath ? 'OK' : 'MANQUANT'})`);
   }
 
   let containerData = {
