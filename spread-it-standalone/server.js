@@ -3,6 +3,7 @@ const session = require('express-session');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { randomUUID } = require('crypto');
 const OpenAI = require('openai');
 const axios = require('axios');
 const cron = require('node-cron');
@@ -14,6 +15,7 @@ const { fetchTrendingTopics } = require('./services/trending');
 const turso = require('./db/turso');
 const { TwitterApi } = require('twitter-api-v2'); // Ajout pour Twitter
 const FormData = require('form-data'); // Ajout pour Facebook Upload
+const { spawn } = require('child_process');
 
 // Nouveaux Services d'Intelligence
 const Strategist = require('./services/strategist');
@@ -60,6 +62,23 @@ function isSet(val) {
   const v = val.trim();
   if (!v) return false;
   return !PLACEHOLDER_PATTERNS.some((re) => re.test(v));
+}
+
+function resolveChatModel() {
+  const fallback = 'gpt-4o-mini';
+  const configured = (process.env.OPENAI_MODEL || '').trim();
+  const chosen = configured || fallback;
+  const unsupported = ['gpt-4', 'gpt-3.5-turbo', 'gpt-3.5-turbo-16k'];
+
+  if (unsupported.includes(chosen.toLowerCase())) {
+    if (!resolveChatModel._warned) {
+      console.warn(`[Chat API] Modèle ${chosen} incompatible avec response_format=json_object. Bascule vers gpt-4o.`);
+      resolveChatModel._warned = true;
+    }
+    return 'gpt-4o';
+  }
+
+  return chosen;
 }
 
 function validateEnv() {
@@ -178,13 +197,15 @@ if (!fs.existsSync(sessionBaseDir)) {
 let sessionStore;
 let sessionStoreName = 'memory';
 
+let mongoClient = null;
+
 // Initialisation MongoDB & Strategist (optionnel via USE_MONGO)
 let db;
 let strategist;
 const USE_MONGO = (process.env.USE_MONGO || 'false') === 'true';
 
 if (USE_MONGO) {
-  const mongoClient = new MongoClient(process.env.MONGODB_URI || 'mongodb://localhost:27017');
+  mongoClient = new MongoClient(process.env.MONGODB_URI || 'mongodb://localhost:27017');
   async function connectDB() {
     try {
       await mongoClient.connect();
@@ -395,21 +416,48 @@ try {
       console.warn('Trending refresh failed:', e && e.message ? e.message : e);
     }
   });
+
+  // NOUVEAU : Nettoyage automatique des uploads temporaires (fichiers > 1h)
+  cron.schedule('0 * * * *', () => {
+    const uploadDir = path.join(__dirname, 'public', 'uploads');
+    if (fs.existsSync(uploadDir)) {
+      fs.readdir(uploadDir, (err, files) => {
+        if (err) return;
+        const now = Date.now();
+        files.forEach(file => {
+          const filePath = path.join(uploadDir, file);
+          fs.stat(filePath, (err, stats) => {
+             // Supprime si vieux de plus d'une heure (3600000 ms)
+            if (!err && now - stats.mtimeMs > 3600000) { 
+              fs.unlink(filePath, () => {});
+            }
+          });
+        });
+      });
+    }
+  });
+
 } catch (e) {
   console.warn('Cron scheduling not available:', e && e.message ? e.message : e);
 }
 
 // --- NEW ENDPOINT: Handles the actual submission from the popup ---
 app.post('/api/smart-share-submit', express.json(), async (req, res) => {
+    // Définition de tempFilePath en dehors du try pour accès dans finally
+    let tempFilePath = null;
+
     try {
         const { mediaUrl, mediaType, caption, platforms, hashtags } = req.body;
         console.log("🚀 Receiving Smart Share Submission:", { mediaUrl, platforms });
 
+        tempFilePath = path.join(__dirname, 'temp_' + Date.now() + (mediaType === 'video' ? '.mp4' : '.jpg'));
+
+        let results = [];
+        let errors = [];
+
         // 1. Download the media temporarily so we can upload it
         // (Note: Many APIs require a local file stream or binary buffer, 
         // passing a raw URL often fails if the platform needs to re-host it)
-        const tempFilePath = path.join(__dirname, 'temp_' + Date.now() + (mediaType === 'video' ? '.mp4' : '.jpg'));
-        
         console.log("⬇️  Downloading media...");
         const response = await axios({
             method: 'GET',
@@ -690,8 +738,7 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
             }
         }
 
-        // 3. Cleanup temp file
-        fs.unlinkSync(tempFilePath);
+        // 3. Cleanup temp file -> DÉPLACÉ DANS FINALLY
 
         // 4. Record successful posts for learning
         for (const result of results) {
@@ -705,6 +752,32 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
                     media_type: mediaType,
                     hashtags_used: hashtags
                 });
+
+                // B. SAUVEGARDE PERMANENTE (Secours SQLite/Turso)
+                // Garantit l'enregistrement même si le Stratégist est en "memory-only"
+                try {
+                    const backupId = `auto_${Date.now()}_${result.platform}`;
+                    const metaData = { mediaUrl, mediaType, hashtags };
+                    
+                    turso.run(
+                        `INSERT INTO shares (id, experiment_id, user_id, platform, original_content, ai_content, post_id, published_at, meta)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        [
+                            backupId,           // id
+                            'smart_share',      // experiment_id
+                            'system_user',      // user_id
+                            result.platform,    // platform
+                            caption,            // original_content
+                            caption,            // ai_content (final)
+                            result.id,          // post_id
+                            Date.now(),         // published_at
+                            JSON.stringify(metaData) // meta
+                        ]
+                    );
+                    console.log(`💾 Post saved to permanent history (SQLite) for ${result.platform}`);
+                } catch (dbErr) {
+                    console.error("⚠️ Backup save to SQLite failed:", dbErr.message);
+                }
             }
         }
 
@@ -718,6 +791,16 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
     } catch (error) {
         console.error("🔥 Global Error in Smart Share:", error);
         res.status(500).json({ success: false, error: error.message });
+    } finally {
+        // NETTOYAGE SÉCURISÉ : Garantit la suppression même en cas de crash
+        if (tempFilePath && fs.existsSync(tempFilePath)) {
+            try {
+                fs.unlinkSync(tempFilePath);
+                console.log("🧹 Temp file cleaned up");
+            } catch (e) {
+                console.error("Warning: Failed to cleanup temp file", e.message);
+            }
+        }
     }
 });
 
@@ -727,16 +810,28 @@ app.post('/api/create-post-ai', express.json(), async (req, res) => {
         
         console.log(`🧠 AI Strategy working for ${options.platform}...`);
 
-        // 1. Si c'est une vidéo, analyser d'abord le contenu visuel profond
+        // 1. Si c'est une vidéo, analyser d'abord le contenu visuel profond AVEC TIMEOUT
         let videoContext = {};
         if (mediaType === 'video' && mediaUrl) {
-           videoContext = await VideoAI.analyzeVideo(mediaUrl);
-           console.log("Video Context:", videoContext.summary);
+           try {
+               // Protection contre timeout infini (5s max)
+               videoContext = await Promise.race([
+                   VideoAI.analyzeVideo(mediaUrl),
+                   new Promise((_, reject) => setTimeout(() => reject(new Error('VideoAI Timeout')), 5000))
+               ]);
+               console.log("Video Context:", videoContext.summary);
+           } catch (vErr) {
+               console.warn("⚠️ Video Analysis skipped (timeout or error):", vErr.message);
+               // On continue sans le contexte vidéo pour ne pas bloquer l'utilisateur
+               videoContext = { summary: [] };
+           }
         }
 
         // 2. Le Strategist combine tout (Rules + Trends + History + Content)
         // Il enrichit le prompt de base avec les données vidéos
-        const enrichedContent = videoContext.summary 
+        // FIX: Vérifie si summary existe ET n'est pas vide pour éviter "Video contains: ."
+        const hasVideoSummary = videoContext.summary && videoContext.summary.length > 0;
+        const enrichedContent = hasVideoSummary
             ? `Video contains: ${videoContext.summary.join(', ')}. Caption: ${content}`
             : content;
 
@@ -960,11 +1055,19 @@ function getGoalAccount(text) {
 // --- NEW NEWSJACKING STRATEGY ---
 async function getNewsjackingContext(userText) {
     try {
-        // 1. Get Trends via Robust Service (Cache/Redis/File)
-        // Replaces direct Google API call which was unstable
-        const trends = await fetchTrendingTopics();
+        // 1. Get Trends avec sécurité (Timeout + Fallback)
+        let trends = null;
+        try {
+            // On race la requête contre un timeout de 2s
+            trends = await Promise.race([
+                fetchTrendingTopics(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Trends timeout')), 2000))
+            ]);
+        } catch (err) {
+            console.warn('⚠️ Trends fetch warning:', err.message);
+            trends = null; // Continue sans trends
+        }
         
-        // Extract Top Trend
         let currentTrend = "L'engouement autour de l'IA générative";
         if (trends && trends.keywords && trends.keywords.length > 0) {
              currentTrend = trends.keywords[0];
@@ -972,24 +1075,95 @@ async function getNewsjackingContext(userText) {
              currentTrend = trends.hashtags[0];
         }
 
-        // 2. Strict Influencer Selection from DB
-        const influencer = getGoalAccount(userText || "");
+        // 2. Get Goal Account (appeler le service Python) avec sécurité
+        let influencer = null;
+        try {
+            // On race le script python contre un timeout de 3s
+            const influencerResult = await Promise.race([
+                callInfluencerSelector(userText),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Python timeout')), 3000))
+            ]);
+
+            influencer = (influencerResult && influencerResult.success) 
+              ? influencerResult.account
+              : getGoalAccount(userText);
+
+        } catch (err) {
+            console.warn('⚠️ Python selector warning:', err.message);
+            influencer = getGoalAccount(userText); // Fallback immédiat
+        }
 
         return { currentTrend, influencer };
 
     } catch (e) {
-        console.warn('Trends Fetch Error, using fallback:', e);
-        // Fallback Safe
+        console.warn('Newsjacking Context Critical Error (using hard fallback):', e.message);
         return { 
-            currentTrend: "La sortie imminente de GTA VI", 
-            influencer: getGoalAccount(userText || "") // Ensure string passed
+            currentTrend: "La tech et l'innovation", 
+            influencer: getGoalAccount(userText)
         };
     }
+}
+
+// Helper: Call Python influencer selector
+async function callInfluencerSelector(userText) {
+  return new Promise((resolve) => {
+    const python = spawn('python3', [
+      path.join(__dirname, 'services', 'influencer_selector.py'),
+      userText || ''
+    ]);
+
+    let output = '';
+    let errorOutput = '';
+
+    // --- MISE A JOUR DE SECURITE ---
+    // Empêche le crash si python3 n'est pas installé ou échoue
+    python.on('error', (err) => {
+      console.warn('⚠️ Python spawn failed (python3 installed?):', err.message);
+      resolve({ success: false, error: 'spawn error' });
+    });
+    // -------------------------------
+    
+    python.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+
+    python.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+      console.warn('[Python stderr]', data.toString());
+    });
+
+    python.on('close', (code) => {
+      try {
+        const result = JSON.parse(output);
+        resolve(result);
+      } catch (e) {
+        console.error('Failed to parse Python output:', output, 'Error:', errorOutput);
+        resolve({ success: false, error: 'Python parse error', details: errorOutput });
+      }
+    });
+
+    setTimeout(() => {
+      python.kill();
+      resolve({ success: false, error: 'timeout' });
+    }, 5000);
+  });
 }
 
 app.post('/api/chat', express.json(), async (req, res) => {
     try {
         const { message, history = [], platforms = ['facebook', 'instagram', 'twitter', 'linkedin'], media } = req.body;
+        
+        // --- START: Simulation d'erreur initiale pour tests ---
+        if (process.env.SIMULATE_INIT_CHAT_ERROR === 'true') {
+          const force = req.body && req.body.simulate_init_error === true || req.query.simulate_init_error === '1';
+          if (!req.session._simulatedChatErrorInjected || force) {
+            req.session._simulatedChatErrorInjected = true;
+            req.session.save(() => {});
+            console.warn('[SIMULATION] Returning simulated 500 error for /api/chat (initial).');
+            return res.status(500).json({ error: 'Erreur réseau (simulation)' });
+          }
+        }
+        // --- END: Simulation d'erreur initiale pour tests ---
         
         console.log(`[Chat API] Received message: "${message ? message.substring(0, 50) : 'null'}..."`);
 
@@ -1008,24 +1182,23 @@ app.post('/api/chat', express.json(), async (req, res) => {
             let failureReason = "Service non configuré";
 
             try {
-                 // APPEL RÉEL (Plus de simulation forcée)
-                 const analysis = await VideoAI.analyzeVideo(media.url);
+                 // TIMEOUT DE SÉCURITÉ : Evite le blocage infini si VideoAI plante
+                 const analysis = await Promise.race([
+                     VideoAI.analyzeVideo(media.url),
+                     new Promise((_, reject) => setTimeout(() => reject(new Error('Video analysis timeout')), 8000))
+                 ]);
                  
-                 // Si c'est une simulation (pas de clé API), on CONTINUE AVEC VIDÉO (Logique "Default Allow")
                  if (analysis.is_simulation) {
-                     isSafe = true; // On assume que c'est bon si on n'a pas pu vérifier
+                     isSafe = true;
                      analysisContext = "MEDIA: Vidéo acceptée par défaut (Analyse AI désactivée).";
                  } else {
-                     // Vraie analyse
-                     // Seul le flag explicite 'VERY_LIKELY' ou 'LIKELY' pour unsafe bloquerait
                      isSafe = (analysis.safety === 'safe' || analysis.safety === 'unknown'); 
                      if (!isSafe) failureReason = "Contenu marqué comme UNSAFE par Google.";
                      else analysisContext = `MEDIA: Vidéo validée par Google AI (Safe).`;
                  }
             } catch(e) {
-                 // En cas d'erreur API, on laisse passer la vidéo (Fail Open)
                  isSafe = true;
-                 console.error("Video Check Failed (Continuing anyway):", e);
+                 console.error("Video Check Failed (Continuing anyway):", e.message);
                  analysisContext = "MEDIA: Vidéo acceptée par défaut (Erreur service AI).";
             }
 
@@ -1033,9 +1206,7 @@ app.post('/api/chat', express.json(), async (req, res) => {
                 selectedMedia = { type: 'video', url: media.url, poster: media.poster };
             } else {
                 console.warn(`⚠️ Video rejected: ${failureReason}`);
-                // FALLBACK SUR L'IMAGE
                 selectedMedia = { type: 'image', url: media.poster, isFallback: true };
-                // ON PRÉVIENT L'UTILISATEUR VIA LE CONTEXTE
                 analysisContext = `MEDIA NOTE: La vidéo a été rejetée ou n'a pas pu être analysée (${failureReason}). L'image de couverture est utilisée à la place.`;
             }
         } else if (media && media.type === 'image') {
@@ -1054,15 +1225,27 @@ app.post('/api/chat', express.json(), async (req, res) => {
       
       CONTEXTE MEDIA : ${analysisContext}
       
-      RÈGLES :
-      1. TEXTE : Corrige la grammaire, garde le ton humain/imparfait.
+      RÈGLES FONDAMENTALES :
+      1. CONTENU UTILISATEUR : Le texte fourni est la base absolue. Si l'utilisateur donne beaucoup de détails ou d'explications, respecte scrupuleusement ces instructions. Ton rôle est de structurer et optimiser, pas d'inventer.
       2. TENDANCE : Lie le sujet à la tendance actuelle : ${currentTrend}.
       3. INFLUENCEUR : Mentionne obligatoirement ${influencer.name} (@${influencer.handle}) dans le style "${influencer.style}".
       4. BRANDING : N'oublie pas que le post inclura un petit logo "Spread It" en filigrane pour la publicité.
+      5. GRAMMAIRE/TON : Garde un ton humain, authentique, voire imparfait. Fuis le phrasé robotique.
+      
+      INSTRUCTION UX (SHOWROOM) :
+      - Le média (vidéo ou image) est affiché DANS LES CARTES SOCIALES "cards" (Showroom) pour prévisualisation.
+      - Il NE DOIT PAS être traité comme une pièce jointe au chat.
+      - Dans "reply", donne uniquement du conseil stratégique. Ne dis pas "Voici la vidéo".
+      
+      FORMATAGE VARIABLE (ADAPTATION STRICTE PAR CARTE) :
+      - Facebook : Format "Storytelling" accepté. Texte plus long (si le contenu le justifie), paragraphes aérés, usage modéré d'emojis.
+      - Instagram : Priorité au visuel. Légende engageante mais concise, bloc de hashtags séparé.
+      - Twitter : Punchline immédiate. Moins de 280 caractères, hashtags intégrés au texte.
+      - LinkedIn : Ton expert/pro. Structure : Accroche -> Développement -> Leçon -> Question ouverte.
       
       FORMAT JSON STRICT :
       {
-         "reply": "Commentaire sur la stratégie (mentionne si on utilise la vidéo ou la photo selon le check Google).",
+         "reply": "Conseil stratégique bref (ex: Pourquoi cet angle newsjacking fonctionne avec ce visuel).",
          "cards": {
              "facebook": "Post complet FB...",
              "instagram": "Légende Insta (visuel fort)...",
@@ -1078,20 +1261,23 @@ app.post('/api/chat', express.json(), async (req, res) => {
         const messages = [
             { role: 'system', content: systemPrompt },
             ...history,
-            { role: 'user', content: `TEXTE UTILISATEUR : ${message}` }
+            { role: 'user', content: message ? `TEXTE UTILISATEUR : ${message}` : "Analyse le média fourni ci-dessus." }
         ];
 
+        // Utiliser gpt-4o pour JSON object (plus fiable que gpt-4o-mini)
+        const modelForJson = 'gpt-4o';
+        
         const completion = await openai.chat.completions.create({
-            model: 'gpt-4',
-            messages: messages,
-            temperature: 0.8, // Increased creativity for newsjacking
-            response_format: { type: "json_object" }
+          model: modelForJson,
+          messages: messages,
+          temperature: 0.8,
+          response_format: { type: "json_object" }
         });
 
         let content = completion.choices[0].message.content;
         console.log("[Chat API] OpenAI Response:", content.substring(0, 100) + "...");
 
-        // SANITIZE JSON (Strip Markdown if present)
+        // SANITIZE JSON
         content = content.replace(/```json/g, '').replace(/```/g, '').trim();
 
         let result;
@@ -1099,14 +1285,13 @@ app.post('/api/chat', express.json(), async (req, res) => {
             result = JSON.parse(content);
         } catch (jsonError) {
             console.error("[Chat API] JSON Parse Error:", jsonError);
-            console.error("[Chat API] Raw Content:", content);
             throw new Error("Erreur de format de réponse AI (JSON invalide).");
         }
 
         res.json(result);
 
     } catch (e) {
-        console.error('Chat API Error:', e);
+        console.error('🔴 Chat API Error:', e.message);
         res.status(500).json({ error: e.message });
     }
 });
@@ -1116,13 +1301,11 @@ app.get('/api/ai-stream', async (req, res) => {
   const prompt = req.query.prompt ? String(req.query.prompt) : '';
   if (!prompt) return res.status(400).json({ error: 'Prompt missing' });
 
-  // Headers for SSE
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders && res.flushHeaders();
 
-  // Helper to send SSE data
   const send = (data) => {
     try {
       res.write(`data: ${data}\n\n`);
@@ -1131,17 +1314,14 @@ app.get('/api/ai-stream', async (req, res) => {
     }
   };
 
-  // Attempt real streaming with OpenAI if supported, otherwise fallback to chunking full reply
   (async () => {
     try {
-      // Attempt streaming call
-      const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+      const model = resolveChatModel();
       let attemptedStream = false;
 
       if (openai && typeof openai.chat === 'object' && typeof openai.chat.completions.create === 'function') {
         try {
-          const systemPrompt = `
-TU ES LE "STRATEGIST" DE SPREAD IT.
+          const systemPrompt = `TU ES LE "STRATEGIST" DE SPREAD IT.
 TON RÔLE : Partenaire de brainstorming et d'exécution pour les réseaux sociaux.
 
 RÈGLE D'OR #1 : CONTENU "HUMAIN" > PERFECTION ROBOTIQUE
@@ -1172,25 +1352,22 @@ RÈGLE D'OR #3 : PILOTE L'INTERFACE
   "advice": "Conseil stratégique court (ex: Ajoute une image sombre)"
 }
 \`\`\`
-- Ce bloc JSON sera lu par le code pour remplir les cartes. L'utilisateur ne le verra pas s'il est bien formaté.
-`;
+- Ce bloc JSON sera lu par le code pour remplir les cartes. L'utilisateur ne le verra pas s'il est bien formaté.`;
 
           const streamResp = await openai.chat.completions.create({
-            model: "gpt-4", // Utilisation de GPT-4 pour suivre les instructions complexes JSON
+            model: model,
             messages: [
               { role: 'system', content: systemPrompt },
               { role: 'user', content: prompt }
             ],
             max_tokens: 1500,
-            temperature: 0.8, // Un peu plus créatif pour le côté humain
+            temperature: 0.8,
             stream: true
           });
 
-          // If the client library returns an async iterable
           if (streamResp[Symbol.asyncIterator]) {
             attemptedStream = true;
             for await (const part of streamResp) {
-              // Attempt to extract text chunk
               const chunkText = (part && part.choices && part.choices[0] && (part.choices[0].delta?.content || part.choices[0].message?.content)) || '';
               if (chunkText) send(chunkText.replace(/\n/g, '\\n'));
             }
@@ -1201,7 +1378,6 @@ RÈGLE D'OR #3 : PILOTE L'INTERFACE
       }
 
       if (!attemptedStream) {
-        // Fallback: non-streaming call then send incremental chunks
         const resp = await openai.chat.completions.create({
           model: model,
           messages: [
@@ -1216,16 +1392,13 @@ RÈGLE D'OR #3 : PILOTE L'INTERFACE
           ? String(resp.choices[0].message.content)
           : '';
 
-        // Split into reasonable chunks (sentences) and stream them
         const chunks = full.match(/[^\.\!\?]+[\.\!\?]?/g) || [full];
         for (const c of chunks) {
           send(c.trim().replace(/\n/g, '\\n'));
-          // Small pause so client sees progressive text
           await new Promise(r => setTimeout(r, 180));
         }
       }
 
-      // Signal end
       res.write('event: end\ndata: {}\n\n');
       res.end();
 
@@ -1236,119 +1409,15 @@ RÈGLE D'OR #3 : PILOTE L'INTERFACE
   })();
 });
 
-app.get('/smart-share', (req, res) => {
-    const { image, video, title, text, source } = req.query;
-    res.render('smart-share', {
-        title: 'Smart Share',
-        data: {
-            image,
-            video,
-            title,
-            text,
-            source
-        }
-    });
-});
-
-app.post('/create', upload.single('content_file'), async (req, res) => {
-  try {
-    let content = req.body.content || '';
-    let mediaPath = null;
-    let mediaType = null;
-
-    // Si un fichier est uploadé, extraire le contenu
-    if (req.file) {
-      if (req.file.mimetype.startsWith('image/')) {
-        mediaPath = req.file.path;
-        mediaType = 'image';
-      } else if (req.file.mimetype.startsWith('video/')) {
-        mediaPath = req.file.path;
-        mediaType = 'video';
-      } else {
-        content = await extractContentFromFile(req.file);
-        mediaType = 'document';
-      }
-    }
-
-    if (!content.trim() && !mediaPath) {
-      return res.status(400).json({ error: 'Contenu, image ou vidéo requis' });
-    }
-
-    // Modération du contenu
-    const moderationResult = await moderateContent(content, mediaPath, mediaType);
-    if (!moderationResult.safe) {
-      return res.status(400).json({
-        error: 'Contenu inapproprié détecté',
-        score: moderationResult.score,
-        reasons: moderationResult.reasons
-      });
-    }
-
-    // Tendance du moment pour enrichir le prompt
-    const trendingContext = await fetchTrendingTopics();
-
-    // Amélioration du contenu avec IA
-    const aiResult = await improveContentWithAI(content, req.body, trendingContext);
-
-    // Générer les versions censurées si nécessaire
-    let censoredContent = null;
-    let censoredMediaPath = null;
-
-    if (moderationResult.score > 0) {
-      censoredContent = censorText(aiResult.improved);
-
-      if (mediaPath && mediaType === 'image') {
-        censoredMediaPath = mediaPath.replace('.jpg', '_censored.jpg').replace('.png', '_censored.png').replace('.gif', '_censored.gif');
-        await censorImage(mediaPath, censoredMediaPath);
-      }
-    }
-
-    // Analyse du timing optimal
-    const optimalTimes = await analyzeOptimalPostingTimes(aiResult);
-
-    // Sauvegarder dans la session
-    req.session.currentContent = {
-      original: content,
-      improved: aiResult.improved,
-      captions: aiResult.captions,
-      hashtags: aiResult.hashtags,
-      sentiment: aiResult.sentiment,
-      seo_score: aiResult.seo_score,
-      optimalTimes: optimalTimes,
-      trending: trendingContext,
-      is_adult: moderationResult.score > 0,
-      censored_content: censoredContent,
-      censored_media: censoredMediaPath,
-      original_media: mediaPath,
-      media_type: mediaType,
-      createdAt: new Date()
-    };
-
-    return req.session.save((sessionError) => {
-      if (sessionError) {
-        console.error('Erreur sauvegarde session:', sessionError);
-        return res.status(500).json({ error: 'Impossible de sauvegarder la session' });
-      }
-
-      res.json({
-        success: true,
-        content: aiResult.improved,
-        captions: aiResult.captions,
-        hashtags: aiResult.hashtags,
-        optimalTimes: optimalTimes,
-        trending: trendingContext,
-        moderation: moderationResult,
-        censored: censoredContent ? {
-          content: censoredContent,
-          image: censoredMediaPath
-        } : null
-      });
-    });
-
-  } catch (error) {
-    console.error('Erreur lors de la création:', error);
-    res.status(500).json({ error: 'Erreur interne du serveur' });
+// Debug endpoint: reset simulation flags for current session (dev only)
+app.get('/debug/reset-simulated-errors', (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ error: 'Forbidden in production' });
   }
+  req.session._simulatedChatErrorInjected = false;
+  req.session.save(() => {
+    res.json({ ok: true, message: 'Simulated chat errors reset for this session' });
+  });
 });
 
 // --- OAUTH ROUTES ---
@@ -1551,6 +1620,18 @@ app.post('/api/turso/resource', express.json(), async (req, res) => {
   }
 });
 
+function ensureLeadsTable() {
+  try {
+    turso.run(
+      'CREATE TABLE IF NOT EXISTS leads (id TEXT PRIMARY KEY, email TEXT NOT NULL, name TEXT, source TEXT, metadata JSON, created_at INTEGER, status TEXT)',
+      []
+    );
+  } catch (err) {
+    console.warn('[Leads] Création table échouée:', err.message || err);
+    throw err;
+  }
+}
+
 // API pour capture de leads (Connect Gate)
 app.post('/api/leads', async (req, res) => {
   try {
@@ -1560,19 +1641,33 @@ app.post('/api/leads', async (req, res) => {
       return res.status(400).json({ error: 'Email requis' });
     }
 
-    if (mongoClient) {
+    if (USE_MONGO && mongoClient) {
       await mongoClient.connect();
-      const db = mongoClient.db('spread_it_leads');
+      const db = mongoClient.db(process.env.MONGODB_DB_NAME || 'spreadit_db');
       const collection = db.collection('leads');
 
       await collection.insertOne({
-        email: email,
+        email,
         name: name || '',
         source: source || 'connect_gate',
         metadata: metadata || {},
         createdAt: new Date(),
         status: 'active'
       });
+    } else {
+      ensureLeadsTable();
+      turso.run(
+        'INSERT INTO leads (id, email, name, source, metadata, created_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [
+          randomUUID(),
+          email,
+          name || '',
+          source || 'connect_gate',
+          JSON.stringify(metadata || {}),
+          Date.now(),
+          'active'
+        ]
+      );
     }
 
     res.json({ success: true, message: 'Lead capturé' });
@@ -1675,7 +1770,7 @@ async function moderateContent(content, mediaPath = null, mediaType = null) {
         blocked = true;
         reasons.push(`Blocage Violence: niveau=${violenceLevel}`);
       } else if (racyBlockLevels.includes(racyLevel)) {
-        // Racy ne bloque que aux niveaux très élevés (faces autorisées)
+        // Racy ne bloque qu'à des niveaux élevés (faces autorisées)
         blocked = true;
         reasons.push(`Blocage Racy: niveau=${racyLevel}`);
       }
@@ -2024,7 +2119,7 @@ async function publishToTwitter(content, mediaPath = null, mediaType = null) {
     const appKey = process.env.TWITTER_APP_KEY || process.env.TWITTER_API_KEY;
     const appSecret = process.env.TWITTER_APP_SECRET || process.env.TWITTER_API_SECRET;
     const accessToken = process.env.TWITTER_ACCESS_TOKEN;
-    const accessSecret = process.env.TWITTER_ACCESS_SECRET;
+    const accessSecret = process.env.TWITTER_ACCESS_TOKEN_SECRET || process.env.TWITTER_ACCESS_SECRET;
 
     if (!appKey || !appSecret || !accessToken || !accessSecret) {
       throw new Error('Twitter credentials missing');
@@ -2232,6 +2327,17 @@ cron.schedule('* * * * *', () => {
   console.log('Vérification des partages planifiés...');
 });
 
+// --- GLOBAL ERROR HANDLER (Dernier rempart anti-crash) ---
+// Doit être défini en DERNIER, après toutes les routes
+app.use((err, req, res, next) => {
+  console.error('🔥 UNHANDLED EXPRESS ERROR:', err.stack);
+  if (!res.headersSent) {
+    res.status(500).json({ 
+      error: 'Internal Server Error', 
+      details: process.env.NODE_ENV === 'development' ? err.message : 'Une erreur interne est survenue.'
+    });
+  }
+});
 
 // Démarrage du serveur si on n'est pas en mode test
 if (process.env.NODE_ENV !== 'test') {
@@ -2239,219 +2345,5 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(`Spread It server running on port ${PORT}`);
   });
 }
-
-// --- ROUTE POUR LE DASHBOARD D'APPRENTISSAGE ---
-app.get('/learning-dashboard', (req, res) => {
-    res.send(`
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Learning Dashboard - Spread It</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body>
-    <div class="container mt-5">
-        <h1 class="mb-4">🤖 AI Learning Dashboard</h1>
-        
-        <div class="row">
-            <div class="col-md-4">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Total Posts</h5>
-                        <h2 id="totalPosts">-</h2>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Avg Engagement</h5>
-                        <h2 id="avgEngagement">-%</h2>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Learning Status</h5>
-                        <h2 id="learningStatus">-</h2>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row mt-4">
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">Platform Performance</div>
-                    <div class="card-body">
-                        <canvas id="platformChart"></canvas>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">Best Performing Posts</div>
-                    <div class="card-body">
-                        <div id="bestPosts" class="list-group"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row mt-4">
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">Performance Criteria</div>
-                    <div class="card-body">
-                        <div id="performanceCriteria" class="text-center">
-                            <div class="spinner-border" role="status">
-                                <span class="visually-hidden">Loading...</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">Learned Patterns</div>
-                    <div class="card-body">
-                        <div id="learnedPatterns" class="text-center">
-                            <div class="spinner-border" role="status">
-                                <span class="visually-hidden">Loading...</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        async function loadDashboard() {
-            try {
-                const response = await fetch('/api/learning-dashboard');
-                const data = await response.json();
-                
-                document.getElementById('totalPosts').textContent = data.totalPosts || 0;
-                document.getElementById('avgEngagement').textContent = data.averageEngagement + '%';
-                document.getElementById('learningStatus').textContent = data.learningEfficiency || 'Unknown';
-                
-                // Platform Chart
-                const ctx = document.getElementById('platformChart').getContext('2d');
-                new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: data.platformStats?.map(p => p._id) || [],
-                        datasets: [{
-                            label: 'Average Engagement %',
-                            data: data.platformStats?.map(p => Math.round(p.avgEngagement * 100) / 100) || [],
-                            backgroundColor: 'rgba(54, 162, 235, 0.5)'
-                        }]
-                    }
-                });
-                
-                // Best Posts
-                const bestPostsDiv = document.getElementById('bestPosts');
-                bestPostsDiv.innerHTML = '<h6>Posts Performants (>10% engagement)</h6>';
-                if (data.bestPerforming) {
-                    data.bestPerforming.forEach(post => {
-                        const item = document.createElement('div');
-                        item.className = 'list-group-item d-flex justify-content-between align-items-center';
-                        item.innerHTML = \`
-                            <div>
-                                <strong>\${post.platform}</strong> - \${post.engagement}% engagement<br>
-                                <small class="text-muted">\${post.content}</small>
-                            </div>
-                            <span class="badge bg-success">\${post.engagement}%</span>
-                        \`;
-                        bestPostsDiv.appendChild(item);
-                    });
-                }
-                
-                // Recent Posts Table
-                const tbody = document.getElementById('recentTableBody');
-                tbody.innerHTML = '';
-                if (data.recentPosts) {
-                    data.recentPosts.forEach(post => {
-                        const row = document.createElement('tr');
-                        const engagementBadge = post.engagement === 'pending' ? 
-                            '<span class="badge bg-warning">Pending</span>' : 
-                            \`<span class="badge bg-\${parseFloat(post.engagement) > 10 ? 'success' : 'secondary'}">\${post.engagement}</span>\`;
-                        row.innerHTML = \`
-                            <td><strong>\${post.platform}</strong></td>
-                            <td>\${post.content}</td>
-                            <td>\${engagementBadge}</td>
-                            <td>\${new Date(post.posted).toLocaleDateString()}</td>
-                        \`;
-                        tbody.appendChild(row);
-                    });
-                }
-                
-                // Performance Criteria
-                const criteriaDiv = document.getElementById('performanceCriteria');
-                if (data.performanceCriteria) {
-                    criteriaDiv.innerHTML = \`
-                        <h5>Auto-Generated Targets</h5>
-                        <div class="row text-center">
-                            <div class="col-4">
-                                <div class="p-2 bg-light rounded">
-                                    <div class="h4 text-warning">\${data.performanceCriteria.minEngagement}%</div>
-                                    <small>Minimum Target</small>
-                                </div>
-                            </div>
-                            <div class="col-4">
-                                <div class="p-2 bg-light rounded">
-                                    <div class="h4 text-primary">\${Math.round(data.performanceCriteria.targetEngagement)}%</div>
-                                    <small>Good Target</small>
-                                </div>
-                            </div>
-                            <div class="col-4">
-                                <div class="p-2 bg-light rounded">
-                                    <div class="h4 text-success">\${Math.round(data.performanceCriteria.excellentThreshold)}%</div>
-                                    <small>Excellent</small>
-                                </div>
-                            </div>
-                        </div>
-                        <small class="text-muted">Based on \${data.performanceCriteria.basedOnPosts} posts</small>
-                    \`;
-                }
-                
-                // Learned Patterns
-                const patternsDiv = document.getElementById('learnedPatterns');
-                if (data.learnedPatterns) {
-                    patternsDiv.innerHTML = \`
-                        <h5>Winning Formulas</h5>
-                        <div class="list-group list-group-flush">
-                            <div class="list-group-item">
-                                <strong>Best Structure:</strong> \${data.learnedPatterns.bestStructure || 'Learning...'}
-                            </div>
-                            <div class="list-group-item">
-                                <strong>Top Style:</strong> \${data.learnedPatterns.topStyle || 'Learning...'}
-                            </div>
-                            <div class="list-group-item">
-                                <strong>Success Rate:</strong> \${data.learnedPatterns.successRate || '0'}% of posts hit targets
-                            </div>
-                            <div class="list-group-item">
-                                <strong>Optimal Length:</strong> \${data.learnedPatterns.optimalLength || '150'} characters
-                            </div>
-                        </div>
-                    \`;
-                }
-                
-            } catch (error) {
-                console.error('Error loading dashboard:', error);
-            }
-        }
-        
-        loadDashboard();
-    </script>
-</body>
-</html>
-    `);
-});
 
 module.exports = app;
