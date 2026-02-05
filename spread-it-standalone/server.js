@@ -399,6 +399,16 @@ try {
   turso.init();
   turso.migrate();
   console.info('✅ Turso/SQLite DB initialized');
+
+  // Async init for Cloud DB (Fire and forget, but log)
+  if (turso.migrateCloud) {
+    turso.migrateCloud().then(() => {
+       console.info('✅ Turso/LibSQL Cloud DB checked/migrated');
+    }).catch(e => {
+       console.warn('⚠️ Turso/LibSQL Cloud DB init failed:', e.message);
+    });
+  }
+
 } catch (e) {
   console.warn('Turso DB not initialized:', e && e.message ? e.message : e);
 }
@@ -763,21 +773,28 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
                         hashtags
                     };
                     
-                    turso.run(
-                        `INSERT INTO shares (id, experiment_id, user_id, platform, original_content, ai_content, post_id, published_at, meta)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                        [
-                            backupId,           // id
-                            'smart_share',      // experiment_id
-                            'system_user',      // user_id
-                            result.platform,    // platform
-                            caption,            // original_content
-                            caption,            // ai_content (final)
-                            result.id,          // post_id
-                            Date.now(),         // published_at
-                            JSON.stringify(metaData) // meta
-                        ]
-                    );
+                    const shareParams = [
+                        backupId,           // id
+                        'smart_share',      // experiment_id
+                        'system_user',      // user_id
+                        result.platform,    // platform
+                        caption,            // original_content
+                        caption,            // ai_content (final)
+                        result.id,          // post_id
+                        Date.now(),         // published_at
+                        JSON.stringify(metaData) // meta
+                    ];
+
+                    const shareSql = `INSERT INTO shares (id, experiment_id, user_id, platform, original_content, ai_content, post_id, published_at, meta)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+                    turso.run(shareSql, shareParams);
+
+                    if (turso.runCloud) {
+                        turso.runCloud(shareSql, shareParams)
+                            .then(() => console.log(`☁️  Synced to Turso Cloud for ${result.platform}`))
+                            .catch(e => console.error("☁️❌ Cloud Sync Failed:", e.message));
+                    }
                     console.log(`💾 Post saved to permanent history (SQLite) for ${result.platform}`);
                 } catch (dbErr) {
                     console.error("⚠️ Backup save to SQLite failed:", dbErr.message);
@@ -1544,14 +1561,23 @@ app.post('/api/share-log', express.json(), async (req, res) => {
 
     // Insert experiment if provided
     if (experiment_id) {
-      try { turso.run('INSERT OR IGNORE INTO experiments (id, name, created_at) VALUES (?,?,?)', [experiment_id, experiment_id, now]); } catch(e){}
+      const expSql = 'INSERT OR IGNORE INTO experiments (id, name, created_at) VALUES (?,?,?)';
+      const expParams = [experiment_id, experiment_id, now];
+      try { 
+        turso.run(expSql, expParams); 
+        if (turso.runCloud) turso.runCloud(expSql, expParams).catch(console.error);
+      } catch(e){}
     }
 
-    turso.run(
-      `INSERT INTO shares (id, experiment_id, user_id, platform, original_content, ai_content, post_id, published_at, meta)
-       VALUES (?,?,?,?,?,?,?,?,?)`,
-      [id, experiment_id, user_id, platform, original, ai, post_id, now, JSON.stringify(payload.meta || {})]
-    );
+    const shareSql = `INSERT INTO shares (id, experiment_id, user_id, platform, original_content, ai_content, post_id, published_at, meta)
+       VALUES (?,?,?,?,?,?,?,?,?)`;
+    const shareParams = [id, experiment_id, user_id, platform, original, ai, post_id, now, JSON.stringify(payload.meta || {})];
+
+    turso.run(shareSql, shareParams);
+    
+    if (turso.runCloud) {
+      turso.runCloud(shareSql, shareParams).catch(e => console.error('Cloud Share Log Error:', e.message));
+    }
 
     res.json({ success: true, id });
   } catch (e) {
