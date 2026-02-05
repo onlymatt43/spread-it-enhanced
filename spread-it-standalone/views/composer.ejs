@@ -93,47 +93,71 @@
 .mockup-card.disconnected .account-status-overlay { display: block; }
 .mockup-card.disconnected .mockup-content { opacity: 0.3; pointer-events: none; }
 
-/* Facebook Style */
+/* Facebook Style (2025) */
 .facebook-style { background: #242526; border-color: #3e4042; }
-.facebook-style .header { padding: 12px; display: flex; align-items: center; gap: 10px; }
-.facebook-style .avatar { width: 40px; height: 40px; border-radius: 50%; background: #444; }
-.facebook-style .meta { flex: 1; }
-.facebook-style .name { font-weight: 600; font-size: 15px; display: block; }
-.facebook-style .time { font-size: 12px; color: #b0b3b8; }
-.facebook-style .body { padding: 0 12px 12px; font-size: 15px; color: #e4e6eb; white-space: pre-wrap; outline: none; }
-.facebook-style .media-area { background: #000; min-height: 200px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.facebook-style .media-area img, .facebook-style .media-area video { max-width: 100%; max-height: 400px; }
-.facebook-style .footer { padding: 12px; border-top: 1px solid #3e4042; display: flex; justify-content: space-around; color: #b0b3b8; font-weight: 600; font-size: 14px; }
+.facebook-style .header { padding: 12px 16px; display: flex; align-items: start; gap: 10px; }
+.facebook-style .avatar { width: 40px; height: 40px; border-radius: 50%; background: #444; flex-shrink:0; }
+.facebook-style .meta { flex: 1; display:flex; flex-direction:column; justify-content:center; }
+.facebook-style .name { font-weight: 600; font-size: 15px; color:#e4e6eb; line-height:1.2; }
+.facebook-style .time { font-size: 13px; color: #b0b3b8; display:flex; align-items:center; gap:4px; margin-top:2px; }
+.facebook-style .body { padding: 0 16px 16px; font-size: 15px; color: #e4e6eb; white-space: pre-wrap; line-height:1.4; outline: none; }
+.facebook-style .media-area { width: 100%; background: #000; overflow: hidden; display: block; position: relative; }
+.facebook-style .media-area img, .facebook-style .media-area video { width: 100%; height: auto; display: block; max-height: 500px; object-fit: contain; }
+.facebook-style .footer { padding: 0 16px; height: 44px; border-top: 1px solid #3e4042; display: flex; align-items: center; justify-content: space-between; color: #b0b3b8; font-weight: 600; font-size: 14px; }
+.facebook-style .footer > span { flex:1; display:flex; align-items:center; justify-content:center; gap:8px; height:36px; border-radius:4px; cursor:pointer; }
+.facebook-style .footer > span:hover { background: rgba(255,255,255,0.1); }
 
-/* Instagram Style */
-.instagram-style { background: #000; border: 1px solid #262626; }
-.instagram-style .header { padding: 14px; display: flex; align-items: center; gap: 10px; }
-.instagram-style .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(45deg, #f09433, #e6683c); padding: 2px; }
+/* Instagram Style (2025) */
+.instagram-style { background: #000; border: 1px solid #363636; border-radius: 8px; }
+.instagram-style .header { padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; height: 56px; box-sizing: border-box; }
+.instagram-style .header-left { display: flex; align-items: center; gap: 10px; }
+.instagram-style .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(45deg, #f09433, #e6683c); padding: 2px; flex-shrink: 0; box-sizing: border-box; }
+.instagram-style .avatar-inner { width: 100%; height: 100%; border-radius: 50%; background: #000; border: 2px solid #000; }
 .instagram-style .name { font-weight: 600; font-size: 14px; color: #fff; }
-.instagram-style .media-area { aspect-ratio: 4/5; background: #111; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+.instagram-style .media-area { width: 100%; aspect-ratio: 4/5; background: #111; position: relative; display:flex; align-items:center; justify-content:center; overflow:hidden; }
 .instagram-style .media-area img, .instagram-style .media-area video { width: 100%; height: 100%; object-fit: cover; }
-.instagram-style .actions { padding: 12px; display: flex; gap: 16px; font-size: 24px; }
-.instagram-style .caption-area { padding: 0 12px 15px; font-size: 14px; }
+.instagram-style .actions { padding: 12px; display: flex; justify-content: space-between; align-items: center; }
+.instagram-style .actions-left { display: flex; gap: 16px; }
+.instagram-style .actions i { font-size: 24px; color: #fff; cursor: pointer; }
+.instagram-style .actions i:hover { opacity: 0.7; }
+.instagram-style .caption-area { padding: 0 12px 12px; font-size: 14px; line-height: 1.4; }
 .instagram-style .caption-body { color: #f5f5f5; outline: none; }
+.instagram-style .more { color: #a8a8a8; cursor: pointer; }
 
-/* LinkedIn Style */
-.linkedin-style { background: #1b1f23; border-color: #333; }
-.linkedin-style .header { padding: 12px; display: flex; gap: 10px; }
-.linkedin-style .avatar { width: 48px; height: 48px; background: #444; }
-.linkedin-style .name { font-weight: 600; font-size: 14px; color: #fff; }
-.linkedin-style .body { padding: 8px 12px; font-size: 14px; color: #e1e9ee; outline: none; }
-.linkedin-style .footer { padding: 12px; border-top: 1px solid #333; display: flex; justify-content: space-around; color: #fff; font-size: 14px; }
+/* LinkedIn Style (2025) */
+.linkedin-style { background: #1b1f23; border: 1px solid #333; border-radius: 8px; }
+.linkedin-style .header { padding: 12px 16px; display: flex; gap: 10px; align-items: flex-start; }
+.linkedin-style .avatar { width: 48px; height: 48px; background: #444; border-radius: 50%; flex-shrink: 0; }
+.linkedin-style .meta-col { display: flex; flex-direction: column; }
+.linkedin-style .name { font-weight: 600; font-size: 14px; color: #fff; line-height: 1.2; }
+.linkedin-style .role { font-size: 12px; color: #ccc; margin-top: 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 200px; }
+.linkedin-style .time { font-size: 12px; color: #aaa; margin-top: 2px; }
+.linkedin-style .body { padding: 0 16px 10px; font-size: 14px; color: #e1e9ee; outline: none; line-height: 1.5; white-space: pre-wrap; }
+.linkedin-style .media-area { width: 100%; background: #000; display: block; overflow: hidden; }
+.linkedin-style .media-area img, .linkedin-style .media-area video { width: 100%; height: auto; display: block; }
+.linkedin-style .footer { padding: 4px 12px; border-top: 1px solid #333; display: flex; justify-content: space-between; align-items: center; min-height: 48px; }
+.linkedin-style .footer > span { display: flex; flex-direction: column; align-items: center; gap: 4px; color: #e1e9ee; font-size: 12px; font-weight: 600; padding: 10px 8px; border-radius: 4px; cursor: pointer; }
+.linkedin-style .footer > span i { font-size: 20px; color: #e1e9ee; }
+.linkedin-style .footer > span:hover { bg: rgba(255,255,255,0.1); }
 
-/* Twitter Style */
-.twitter-style { background: #000; border-color: #2f3336; }
-.twitter-style .header { padding: 12px 16px 0; display: flex; gap: 12px; }
+/* Twitter Style (2025) */
+.twitter-style { background: #000; border: 1px solid #2f3336; border-radius: 12px; padding-bottom: 8px; }
+.twitter-style .mockup-content { padding: 12px 16px; display: grid; grid-template-columns: 40px 1fr; gap: 12px; }
 .twitter-style .avatar { width: 40px; height: 40px; border-radius: 50%; background: #333; }
-.twitter-style .name-row { display: flex; gap: 5px; font-size: 15px; }
-.twitter-style .handle { color: #71767b; }
-.twitter-style .body { padding: 0 16px; margin-top: -20px; margin-left: 64px; margin-bottom: 10px; font-size: 15px; color: #e7e9ea; outline: none; }
-.twitter-style .media-container { margin-left: 64px; margin-right: 16px; border-radius: 16px; border: 1px solid #2f3336; overflow: hidden; }
-.twitter-style .media-container img, .twitter-style .media-container video { width: 100%; max-height: 300px; object-fit: cover; display: block; }
-.twitter-style .footer { margin-left: 64px; padding: 12px 16px 12px 0; display: flex; justify-content: space-between; color: #71767b; font-size: 18px; max-width: 400px; }
+.twitter-style .right-col { display: flex; flex-direction: column; width: 100%; min-width: 0; }
+.twitter-style .header { padding: 0; display: flex; gap: 4px; align-items: baseline; margin-bottom: 2px; }
+.twitter-style .name { font-weight: 700; font-size: 15px; color: #e7e9ea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.twitter-style .handle { color: #71767b; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.twitter-style .dot { color: #71767b; font-size: 15px; }
+.twitter-style .time { color: #71767b; font-size: 15px; }
+.twitter-style .body { padding: 0; margin: 0; font-size: 15px; line-height: 1.3; color: #e7e9ea; outline: none; white-space: pre-wrap; margin-bottom: 12px; }
+.twitter-style .media-container { width: 100%; border-radius: 16px; border: 1px solid #2f3336; overflow: hidden; margin-bottom: 12px; }
+.twitter-style .media-container img, .twitter-style .media-container video { width: 100%; height: auto; display: block; max-height: 400px; object-fit: cover; }
+.twitter-style .footer { padding: 0; margin: 0; display: flex; justify-content: space-between; color: #71767b; font-size: 13px; max-width: 400px; }
+.twitter-style .footer i { font-size: 18px; cursor: pointer; transition: color 0.2s; }
+.twitter-style .footer div { display: flex; align-items: center; gap: 8px; }
+.twitter-style .footer div:hover i, .twitter-style .footer div:hover span { color: #1d9bf0; }
+.twitter-style .footer div:nth-child(3):hover i { color: #f91880; } /* Like heart color */
 
 /* Action Footer */
 .card-action-bar {
@@ -207,29 +231,33 @@
             </div>
         </article>
 
-        <!-- INSTAGRAM CARD -->
+        <!-- INSTAGRAM CARD (UPDATED) -->
         <article class="mockup-card instagram-style" id="preview-instagram" data-platform="instagram">
             <div class="account-status-overlay">🔴 Compte Instagram non connecté</div>
-            <div class="warning-box" id="ig-warning">⚠️ Attention: Format image recommandé (4:5) ou Vidéo (9:16).</div>
             <div class="mockup-content">
                 <div class="header">
-                    <div class="avatar"></div>
-                    <span class="name">votre_compte</span>
-                    <i class="fas fa-ellipsis-h ms-auto" style="color:white"></i>
+                    <div class="header-left">
+                        <div class="avatar"><div class="avatar-inner"></div></div>
+                        <span class="name">votre_compte</span>
+                    </div>
+                    <i class="fas fa-ellipsis-h" style="color:white"></i>
                 </div>
-                <!-- Media takes center stage -->
+                <!-- Media Area -->
                 <div class="media-area">
-                    <span style="color:#666; font-size:12px">Média Apparaît Ici</span>
+                    <span style="color:#666; font-size:12px; position:absolute;">Média Apparaît Ici</span>
                 </div>
                 <div class="actions">
-                    <i class="far fa-heart"></i>
-                    <i class="far fa-comment"></i>
-                    <i class="far fa-paper-plane"></i>
-                    <i class="far fa-bookmark ms-auto"></i>
+                    <div class="actions-left">
+                        <i class="far fa-heart"></i>
+                        <i class="far fa-comment"></i>
+                        <i class="far fa-paper-plane"></i>
+                    </div>
+                    <i class="far fa-bookmark"></i>
                 </div>
                 <div class="caption-area">
                     <span style="font-weight:600">votre_compte</span>
                     <span class="caption-body post-text" contenteditable="true">En attente de contenu...</span>
+                    <div class="more">plus</div>
                 </div>
             </div>
             <div class="card-action-bar">
@@ -237,24 +265,25 @@
             </div>
         </article>
 
-        <!-- LINKEDIN CARD -->
+        <!-- LINKEDIN CARD (UPDATED) -->
         <article class="mockup-card linkedin-style" id="preview-linkedin" data-platform="linkedin">
             <div class="account-status-overlay">🔴 Compte LinkedIn non connecté</div>
             <div class="mockup-content">
                 <div class="header">
                     <div class="avatar"></div>
-                    <div>
+                    <div class="meta-col">
                         <div class="name">Votre Profil</div>
-                        <div style="font-size:12px; color:#aaa">Expert · 1st</div>
-                        <div style="font-size:12px; color:#aaa">Now · <i class="fas fa-globe"></i></div>
+                        <div class="role">Expert en Stratégie Digitale • Créateur de Contenu IA</div>
+                        <div class="time">Juste maintenant • <i class="fas fa-globe-americas"></i></div>
                     </div>
+                    <i class="fas fa-ellipsis-h" style="color:#e1e9ee; margin-left:auto;"></i>
                 </div>
                 <div class="body post-text" contenteditable="true">En attente de contenu...</div>
-                <div class="media-area facebook-style"></div> <!-- Reusing FB media style generic -->
+                <div class="media-area"></div>
                 <div class="footer">
                     <span><i class="far fa-thumbs-up"></i> J'aime</span>
                     <span><i class="far fa-comment-dots"></i> Commenter</span>
-                    <span><i class="fas fa-share-square"></i> Diffuser</span>
+                    <span><i class="fas fa-retweet"></i> Republier</span>
                     <span><i class="fas fa-paper-plane"></i> Envoyer</span>
                 </div>
             </div>
@@ -263,25 +292,28 @@
             </div>
         </article>
 
-        <!-- TWITTER CARD -->
+        <!-- TWITTER CARD (UPDATED) -->
         <article class="mockup-card twitter-style" id="preview-twitter" data-platform="twitter">
             <div class="account-status-overlay">🔴 Compte Twitter/X non connecté</div>
             <div class="mockup-content">
-                <div class="header">
-                    <div class="avatar"></div>
-                    <div class="name-row">
-                        <span style="font-weight:700; color:white">You</span>
-                        <span class="handle">@yourhandle · 1m</span>
+                <div class="avatar"></div>
+                <div class="right-col">
+                    <div class="header">
+                        <span class="name">You</span>
+                        <span class="handle">@yourhandle</span>
+                        <span class="dot">·</span>
+                        <span class="time">1m</span>
+                        <i class="fas fa-ellipsis-h" style="color:#71767b; margin-left:auto;"></i>
                     </div>
-                </div>
-                <div class="body post-text" contenteditable="true">En attente de contenu...</div>
-                <div class="media-container media-area"></div>
-                <div class="footer">
-                    <i class="far fa-comment"></i>
-                    <i class="fas fa-retweet"></i>
-                    <i class="far fa-heart"></i>
-                    <i class="far fa-chart-bar"></i>
-                    <i class="fas fa-share"></i>
+                    <div class="body post-text" contenteditable="true">En attente de contenu...</div>
+                    <div class="media-container media-area"></div>
+                    <div class="footer">
+                        <div><i class="far fa-comment"></i> <span>2</span></div>
+                        <div><i class="fas fa-retweet"></i> <span>5</span></div>
+                        <div><i class="far fa-heart"></i> <span>12</span></div>
+                        <div><i class="far fa-chart-bar"></i> <span>850</span></div>
+                        <div><i class="fas fa-share"></i></div>
+                    </div>
                 </div>
             </div>
             <div class="card-action-bar">
