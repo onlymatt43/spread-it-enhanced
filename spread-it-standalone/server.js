@@ -1040,6 +1040,11 @@ app.get('/privacy', (req, res) => res.render('privacy'));
 app.get('/terms', (req, res) => res.render('terms'));
 app.get('/reaction', (req, res) => res.render('reaction')); // New Reaction Mode
 app.get('/data-deletion', (req, res) => res.render('data_deletion'));
+// Je remets la route /verify comme demandé
+app.get('/verify', (req, res) => {
+    res.set('Content-Type', 'text/plain');
+    res.send('tiktok-developers-site-verification=9xKCnP2dfS1Zy9SqVjyp7NJGX3PnxXtZ');
+});
 
 // --- TIKTOK DYNAMIC VERIFICATION ---
 // Répond automatiquement à n'importe quel fichier tiktokXXXXX.txt
