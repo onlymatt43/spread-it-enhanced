@@ -1106,22 +1106,16 @@ app.get('/auth/tiktok/callback', async (req, res) => {
             delete req.session.tiktokCodeVerifier;
         }
 
-        // AFFICHER LE TOKEN POUR LA CONFIGURATION INITIALE
-        // (En prod, on redirigerait vers le dashboard)
-        res.send(`
-            <h1>✅ Connexion TikTok Réussie !</h1>
-            <p>Copie ces clés dans ton fichier .env :</p>
-            <pre style="background:#eee; padding:15px; border-radius:5px;">
-TIKTOK_ACCESS_TOKEN=${data.access_token}
-TIKTOK_REFRESH_TOKEN=${data.refresh_token}
-TIKTOK_OPEN_ID=${data.open_id}
-            </pre>
-            <p>Access Token expire dans : ${data.expires_in} secondes.</p>
-            <a href="/">Retour à l'accueil</a>
-        `);
+        // AFFICHER LE TOKEN VIA LE TEMPLATE JOLI
+        res.render('tiktok-success', { tokenData: data });
+
     } catch (e) {
         console.error("TikTok Auth Error:", e);
-        res.status(500).send("Erreur lors de l'échange du token TikTok.");
+        res.status(500).send(`
+            <h1 style="color:red">Erreur TikTok</h1>
+            <p>${e.message}</p>
+            <a href="/composer">Retour</a>
+        `);
     }
 });
 
