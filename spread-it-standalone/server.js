@@ -21,6 +21,7 @@ const { spawn } = require('child_process');
 const Strategist = require('./services/strategist');
 const VideoAI = require('./services/video-ai');
 const VideoUploader = require('./services/video-uploader');
+const TikTokAuth = require('./services/tiktok-auth');
 const googleTrends = require('google-trends-api');
 
 // Configure layout if using ejs-layouts
@@ -1037,6 +1038,59 @@ app.get('/privacy', (req, res) => res.render('privacy'));
 app.get('/terms', (req, res) => res.render('terms'));
 app.get('/reaction', (req, res) => res.render('reaction')); // New Reaction Mode
 app.get('/data-deletion', (req, res) => res.render('data_deletion'));
+
+// --- AUTHENTIFICATION TIKTOK ---
+// 1. Démarrer le Login
+app.get('/auth/tiktok/login', (req, res) => {
+    try {
+        const state = randomUUID();
+        // Sauvegarder l'état en session pour sécurité CSRF
+        if (req.session) req.session.tiktokState = state;
+        
+        const url = TikTokAuth.generateAuthUrl(state);
+        res.redirect(url);
+    } catch (e) {
+        res.status(500).send("Erreur de configuration TikTok : " + e.message);
+    }
+});
+
+// 2. Callback (Retour de TikTok)
+app.get('/auth/tiktok/callback', async (req, res) => {
+    const { code, state, error, error_description } = req.query;
+
+    if (error) {
+        return res.status(400).send(`TikTok Error: ${error_description}`);
+    }
+
+    // Vérifier CSRF si possible
+    // if (req.session && req.session.tiktokState !== state) { ... }
+
+    try {
+        const data = await TikTokAuth.getAccessToken(code);
+        
+        // Stocker le token dans la session (ou DB en prod)
+        if (req.session) {
+            req.session.tiktokToken = data; 
+        }
+
+        // AFFICHER LE TOKEN POUR LA CONFIGURATION INITIALE
+        // (En prod, on redirigerait vers le dashboard)
+        res.send(`
+            <h1>✅ Connexion TikTok Réussie !</h1>
+            <p>Copie ces clés dans ton fichier .env :</p>
+            <pre style="background:#eee; padding:15px; border-radius:5px;">
+TIKTOK_ACCESS_TOKEN=${data.access_token}
+TIKTOK_REFRESH_TOKEN=${data.refresh_token}
+TIKTOK_OPEN_ID=${data.open_id}
+            </pre>
+            <p>Access Token expire dans : ${data.expires_in} secondes.</p>
+            <a href="/">Retour à l'accueil</a>
+        `);
+    } catch (e) {
+        console.error("TikTok Auth Error:", e);
+        res.status(500).send("Erreur lors de l'échange du token TikTok.");
+    }
+});
 
 app.get('/create', (req, res) => {
   res.redirect('/composer');
