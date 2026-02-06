@@ -1087,7 +1087,18 @@ app.get('/auth/tiktok/callback', async (req, res) => {
     const { code, state, error, error_description } = req.query;
 
     if (error) {
-        return res.status(400).send(`TikTok Error: ${error_description}`);
+        // Gestion propre de l'erreur / Refus de l'utilisateur
+        return res.status(400).send(`
+            <!DOCTYPE html>
+            <html lang="fr">
+            <body style="font-family:sans-serif; background:#000; color:#fff; text-align:center; padding-top:50px;">
+                <h1 style="color:#FE2C55">Connexion annulée</h1>
+                <p>La connexion à TikTok a été refusée ou a échoué.</p>
+                <p style="color:#888">Message : ${error_description}</p>
+                <a href="/composer" style="display:inline-block; margin-top:20px; text-decoration:none; background:#333; color:white; padding:10px 20px; border-radius:5px;">Retourner au Dashboard</a>
+            </body>
+            </html>
+        `);
     }
 
     // Vérifier CSRF si possible
