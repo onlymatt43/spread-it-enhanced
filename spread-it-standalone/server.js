@@ -1040,9 +1040,18 @@ app.get('/privacy', (req, res) => res.render('privacy'));
 app.get('/terms', (req, res) => res.render('terms'));
 app.get('/reaction', (req, res) => res.render('reaction')); // New Reaction Mode
 app.get('/data-deletion', (req, res) => res.render('data_deletion'));
-app.get('/verify', (req, res) => {
+
+// --- TIKTOK DYNAMIC VERIFICATION ---
+// Répond automatiquement à n'importe quel fichier tiktokXXXXX.txt
+// Plus besoin de redéployer quand le code change !
+app.get(/^\/tiktok[a-zA-Z0-9]+\.txt$/, (req, res) => {
+    // ex: /tiktok9xKCnP2dfS1Zy9SqVjyp7NJGX3PnxXtZ.txt
+    const filename = req.path.substring(1); // retire le / initial
+    const hash = filename.replace('tiktok', '').replace('.txt', '');
+    
+    console.log(`Auto-verifying TikTok request for hash: ${hash}`);
     res.set('Content-Type', 'text/plain');
-    res.send('tiktok-developers-site-verification=9xKCnP2dfS1Zy9SqVjyp7NJGX3PnxXtZ');
+    res.send(`tiktok-developers-site-verification=${hash}`);
 });
 
 // --- AUTHENTIFICATION TIKTOK ---
