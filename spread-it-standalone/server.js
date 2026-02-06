@@ -1103,7 +1103,8 @@ app.get('/composer', (req, res) => {
       facebook: !!(process.env.FACEBOOK_ACCESS_TOKEN || (req.session.tokens && req.session.tokens.facebook)),
       twitter: !!(process.env.TWITTER_ACCESS_TOKEN),
       instagram: !!(process.env.INSTAGRAM_ACCESS_TOKEN),
-      tiktok: false 
+      tiktok: !!(process.env.TIKTOK_ACCESS_TOKEN || (req.session.tiktokToken)),
+      youtube: !!(process.env.YOUTUBE_REFRESH_TOKEN)
   };
 
   res.render('composer', {

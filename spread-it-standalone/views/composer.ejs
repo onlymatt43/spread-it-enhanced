@@ -105,6 +105,17 @@
 }
 .mockup-card.disconnected .account-status-overlay { display: block; }
 .mockup-card.disconnected .mockup-content { opacity: 0.3; pointer-events: none; }
+/* Disable action button when disconnected */
+.mockup-card.disconnected .card-action-bar button {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+    background: #333;
+}
+.mockup-card.disconnected .card-action-bar button::after {
+    content: " (Non connecté)";
+    font-size: 0.9em;
+}
 
 /* SPECIAL LAYOUTS */
 
@@ -637,6 +648,11 @@
     // 1. Initialize Deck State based on Config
     document.addEventListener('DOMContentLoaded', () => {
         const platforms = ['facebook', 'instagram', 'linkedin', 'twitter', 'tiktok', 'youtube'];
+        const authRoutes = {
+            tiktok: '/auth/tiktok/login',
+            linkedin: '/auth/linkedin/login'
+        };
+
         platforms.forEach(p => {
             const card = document.getElementById(`preview-${p}`);
             if(!card) return;
@@ -644,6 +660,23 @@
             const isConnected = USER_CONFIG[p];
             if (!isConnected) {
                 card.classList.add('disconnected');
+                
+                // Add Connect Button if route exists
+                const overlay = card.querySelector('.account-status-overlay');
+                if(overlay && authRoutes[p]) {
+                    overlay.innerHTML = `
+                        <div style="margin-bottom:8px">🔴 Compte non connecté</div>
+                        <a href="${authRoutes[p]}" class="btn-share-real" style="
+                            background: white; 
+                            color: black; 
+                            text-decoration: none; 
+                            padding: 6px 12px; 
+                            font-size: 13px; 
+                            display: inline-block;
+                            border-radius: 20px;
+                        ">Se connecter</a>
+                    `;
+                }
             } else {
                 card.classList.remove('disconnected');
             }
