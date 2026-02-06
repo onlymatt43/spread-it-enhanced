@@ -1049,7 +1049,15 @@ app.get('/auth/tiktok/login', (req, res) => {
         // Sauvegarder l'état en session pour sécurité CSRF
         if (req.session) req.session.tiktokState = state;
         
-        const url = TikTokAuth.generateAuthUrl(state);
+        // Génération PKCE (Proof Key for Code Exchange)
+        // Obligatoire pour TikTok V2 API
+        const { verifier, challenge } = TikTokAuth.generatePKCE();
+        
+        if (req.session) {
+            req.session.tiktokCodeVerifier = verifier;
+        }
+
+        const url = TikTokAuth.generateAuthUrl(state, challenge);
         res.redirect(url);
     } catch (e) {
         res.status(500).send("Erreur de configuration TikTok : " + e.message);
@@ -1068,11 +1076,16 @@ app.get('/auth/tiktok/callback', async (req, res) => {
     // if (req.session && req.session.tiktokState !== state) { ... }
 
     try {
-        const data = await TikTokAuth.getAccessToken(code);
+        // Récupérer le code_verifier de la session pour l'échange de token
+        const codeVerifier = req.session ? req.session.tiktokCodeVerifier : null;
+
+        const data = await TikTokAuth.getAccessToken(code, codeVerifier);
         
         // Stocker le token dans la session (ou DB en prod)
         if (req.session) {
             req.session.tiktokToken = data; 
+            // Nettoyer le verifier après usage
+            delete req.session.tiktokCodeVerifier;
         }
 
         // AFFICHER LE TOKEN POUR LA CONFIGURATION INITIALE

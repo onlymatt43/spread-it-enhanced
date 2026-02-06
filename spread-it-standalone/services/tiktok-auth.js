@@ -2,6 +2,7 @@ const axios = require('axios');
 const querystring = require('querystring');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 /*
  * SERVICE: TikTok Auth Helper
@@ -20,9 +21,32 @@ class TikTokAuth {
     }
 
     /**
+     * Génère une paire PKCE (Verifier + Challenge)
+     * Requis pour éviter l'erreur "code_challenge"
+     */
+    generatePKCE() {
+        // 1. Code Verifier : Chaîne aléatoire sécurisée
+        const verifier = crypto.randomBytes(32)
+            .toString('base64')
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=/g, '');
+
+        // 2. Code Challenge : Hash SHA256 du verifier
+        const challenge = crypto.createHash('sha256')
+            .update(verifier)
+            .digest('base64')
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=/g, '');
+
+        return { verifier, challenge };
+    }
+
+    /**
      * Génère l'URL de connexion pour l'utilisateur
      */
-    generateAuthUrl(state) {
+    generateAuthUrl(state, codeChallenge) {
         if (!this.clientKey) throw new Error("Missing TIKTOK_CLIENT_KEY");
 
         const csrfState = state || Math.random().toString(36).substring(7);
@@ -33,6 +57,12 @@ class TikTokAuth {
         url += `&response_type=code`;
         url += `&redirect_uri=${encodeURIComponent(this.redirectUri)}`;
         url += `&state=${csrfState}`;
+        
+        // Ajout PKCE si fourni
+        if (codeChallenge) {
+            url += `&code_challenge=${codeChallenge}`;
+            url += `&code_challenge_method=S256`;
+        }
 
         return url;
     }
@@ -40,7 +70,7 @@ class TikTokAuth {
     /**
      * Échange le code reçu contre un Access Token
      */
-    async getAccessToken(code) {
+    async getAccessToken(code, codeVerifier) {
         if (!this.clientKey || !this.clientSecret) throw new Error("Missing Tikok Keys");
 
         const params = new URLSearchParams();
@@ -49,6 +79,10 @@ class TikTokAuth {
         params.append('code', code);
         params.append('grant_type', 'authorization_code');
         params.append('redirect_uri', this.redirectUri);
+
+        if (codeVerifier) {
+            params.append('code_verifier', codeVerifier);
+        }
 
         try {
             const response = await axios.post('https://open.tiktokapis.com/v2/oauth/token/', params, {
