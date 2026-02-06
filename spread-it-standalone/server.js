@@ -1043,7 +1043,7 @@ app.get('/data-deletion', (req, res) => res.render('data_deletion'));
 // Je remets la route /verify comme demandé
 app.get('/verify', (req, res) => {
     res.set('Content-Type', 'text/plain');
-    res.send('tiktok-developers-site-verification=GGobiyjEeuSj91JYUK5ahCBql8mU8t68');
+    res.send('tiktok-developers-site-verification=NyPBtRH4x5RVlQYdGh4qZJcwC80UGjUL');
 });
 
 // --- TIKTOK DYNAMIC VERIFICATION ---
