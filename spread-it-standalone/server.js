@@ -1,8 +1,22 @@
+const fs = require('fs');
+const path = require('path');
+
+// Charge d'abord .env.local (perso), puis .env (template) si présent
+// LE FAIRE AVANT TOUT AUTRE REQUIRE qui pourrait utiliser process.env
+const defaultEnvPath = path.join(__dirname, '.env');
+const localEnvPath = path.join(__dirname, '.env.local');
+
+if (fs.existsSync(defaultEnvPath)) {
+  require('dotenv').config({ path: defaultEnvPath });
+}
+
+if (fs.existsSync(localEnvPath)) {
+  require('dotenv').config({ path: localEnvPath, override: true });
+}
+
 const express = require('express');
 const session = require('express-session');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 const { randomUUID } = require('crypto');
 const OpenAI = require('openai');
 const axios = require('axios');
@@ -27,18 +41,6 @@ const googleTrends = require('google-trends-api');
 // Configure layout if using ejs-layouts
 // const expressLayouts = require('express-ejs-layouts');
 // app.use(expressLayouts);
-
-// Charge d'abord .env.local (perso), puis .env (template) si présent
-const defaultEnvPath = path.join(__dirname, '.env');
-const localEnvPath = path.join(__dirname, '.env.local');
-
-if (fs.existsSync(defaultEnvPath)) {
-  require('dotenv').config({ path: defaultEnvPath });
-}
-
-if (fs.existsSync(localEnvPath)) {
-  require('dotenv').config({ path: localEnvPath, override: true });
-}
 
 const app = express();
 
