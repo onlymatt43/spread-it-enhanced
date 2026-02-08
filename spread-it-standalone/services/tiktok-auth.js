@@ -16,8 +16,8 @@ class TikTokAuth {
         this.clientSecret = process.env.TIKTOK_CLIENT_SECRET;
         // L'URL de callback DOIT être configurée dans le Developer Portal de TikTok
         // Elle doit correspondre exactement, par ex: https://ton-domaine.com/auth/tiktok/callback
-        // Pour le dev local: http://localhost:3000/auth/tiktok/callback
-        this.redirectUri = process.env.TIKTOK_REDIRECT_URI || 'http://localhost:3000/auth/tiktok/callback';
+        // Défaut sécurisé pour la Prod: https://spread.onlymatt.ca/auth/tiktok/callback
+        this.redirectUri = process.env.TIKTOK_REDIRECT_URI || 'https://spread.onlymatt.ca/auth/tiktok/callback';
     }
 
     /**
