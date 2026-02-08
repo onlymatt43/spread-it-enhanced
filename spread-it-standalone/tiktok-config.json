@@ -1,0 +1,5 @@
+{
+  "TIKTOK_CLIENT_KEY": "sbawbgfr95mj41hen5",
+  "TIKTOK_CLIENT_SECRET": "ufAdSfo7kvjyRiFJIQnw7jzaydDzjmO4",
+  "TIKTOK_REDIRECT_URI": "https://spread.onlymatt.ca/auth/tiktok/callback"
+}

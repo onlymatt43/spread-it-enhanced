@@ -14,6 +14,18 @@ if (fs.existsSync(localEnvPath)) {
   require('dotenv').config({ path: localEnvPath, override: true });
 }
 
+// FORCE LOAD TIKTOK SANDBOX CONFIG (To bypass Render Env Vars limitation for Verification)
+const tiktokConfigPath = path.join(__dirname, 'tiktok-config.json');
+if (fs.existsSync(tiktokConfigPath)) {
+    try {
+        const tiktokConfig = require(tiktokConfigPath);
+        if(tiktokConfig.TIKTOK_CLIENT_KEY) process.env.TIKTOK_CLIENT_KEY = tiktokConfig.TIKTOK_CLIENT_KEY;
+        if(tiktokConfig.TIKTOK_CLIENT_SECRET) process.env.TIKTOK_CLIENT_SECRET = tiktokConfig.TIKTOK_CLIENT_SECRET;
+        if(tiktokConfig.TIKTOK_REDIRECT_URI) process.env.TIKTOK_REDIRECT_URI = tiktokConfig.TIKTOK_REDIRECT_URI;
+        console.log("✅ TIKTOK SANDBOX CONFIG LOADED");
+    } catch(e) { console.error("Error loading tiktok config", e); }
+}
+
 const express = require('express');
 const session = require('express-session');
 const multer = require('multer');
