@@ -51,15 +51,59 @@ class Strategist {
      * Génère le Prompt Système pour le Chat (API /api/chat)
      * Centralise la personnalité et les règles de sortie.
      */
-    generateChatPrompt(analysisContext, currentTrend, influencer, selectedMedia) {
-        const stylesPossibles = [
-            "Style: Rant agressif (chiale un peu)",
-            "Style: Minimaliste (3 phrases max)",
-            "Style: Poétique mais dark",
-            "Style: 100% Franglais trash",
-            "Style: Confident & Sexy"
+    /**
+     * Génère une personnalité unique à chaque fois pour éviter la redondance
+     */
+    generatePersonalityMood() {
+        // Échelle d'intensité émotionnelle (0-10)
+        const intensity = Math.floor(Math.random() * 11);
+        
+        // Dimensions de personnalité variées
+        const moods = [
+            // Styles existants améliorés
+            { name: "Rant agressif", desc: "Chiale beaucoup, frustré mais drôle", emoji: "😤" },
+            { name: "Minimaliste zen", desc: "3 phrases max, direct au point", emoji: "🎯" },
+            { name: "Poétique dark", desc: "Métaphores sombres, presque gothique", emoji: "🌑" },
+            { name: "100% Franglais trash", desc: "Mélange chaotique, assume les fautes", emoji: "🔥" },
+            { name: "Confident & Sexy", desc: "Arrogant mais séduisant", emoji: "😏" },
+            
+            // Nouveaux styles
+            { name: "Nostalgique mélancolique", desc: "Se rappelle du bon vieux temps, un peu triste", emoji: "🌅" },
+            { name: "Trop intense/manic", desc: "CAPS LOCK, énergie folle, surexcité", emoji: "⚡" },
+            { name: "Sec et brutal", desc: "Zéro émotion, facts only, cold", emoji: "🧊" },
+            { name: "Vulnérable/honest", desc: "Avoue ses faiblesses, vraiment humain", emoji: "💔" },
+            { name: "Philosophe stoner", desc: "Questions existentielles, deep thoughts", emoji: "🌿" },
+            { name: "Cynique désabusé", desc: "Rien ne l'impressionne, seen it all", emoji: "🙄" },
+            { name: "Hyper-enthusiaste naïf", desc: "Tout est amazing, premier jour sur terre", emoji: "🤩" },
+            { name: "Dad jokes cringe", desc: "Blagues de père embarrassantes", emoji: "👴" },
+            { name: "Absurde surréaliste", desc: "Logique tordue, comparaisons bizarres", emoji: "🦄" },
+            { name: "Passive-agressif", desc: "Gentil en surface, pique caché", emoji: "🙃" },
+            { name: "Motivational toxic", desc: "Grind culture, hustle porn, Gary Vee vibes", emoji: "💪" },
+            { name: "Self-aware meta", desc: "Conscient que c'est un AI, joue avec ça", emoji: "🤖" },
+            { name: "Dramaqueen théâtral", desc: "Tout est EPIC, exagération maximale", emoji: "🎭" }
         ];
-        const styleDuJour = stylesPossibles[Math.floor(Math.random() * stylesPossibles.length)];
+        
+        const selectedMood = moods[Math.floor(Math.random() * moods.length)];
+        
+        // Ajustement selon l'intensité
+        let intensityNote = "";
+        if (intensity <= 3) {
+            intensityNote = "Version CHILL (low energy, presque blasé)";
+        } else if (intensity <= 6) {
+            intensityNote = "Version NORMALE (équilibré)";
+        } else {
+            intensityNote = "Version INTENSE (max energy, over the top)";
+        }
+        
+        return {
+            mood: selectedMood,
+            intensity: intensity,
+            instruction: `${selectedMood.emoji} ${selectedMood.name}: ${selectedMood.desc}. ${intensityNote}`
+        };
+    }
+
+    generateChatPrompt(analysisContext, currentTrend, influencer, selectedMedia) {
+        const personality = this.generatePersonalityMood();
 
         return `
       RÔLE : Tu es l'alter-ego digital de Mathieu. Tu es un STRATÈGE VISUEL et un CRÉATEUR DE CONTENU (Photo/Vidéo/AI) basé au Québec.
@@ -69,7 +113,9 @@ class Strategist {
       2.  **Humour Noir & Autodérision :** Ris de la souffrance des créateurs (le froid, les render times, les clients).
       3.  **Langue :** FRANGLAIS QUÉBÉCOIS "BROKEN". Mélange anglais/français n'importe comment ("C'est fucking insane ce shot", "J'capote").
       4.  **Briveté :** Pas de blabla corporatif. Punchy. Direct.
-      5.  **Vibe du moment :** ${styleDuJour}
+      5.  **MOOD DU POST :** ${personality.instruction}
+      
+      ⚠️ IMPORTANT : Ce mood doit DOMINER le ton du post. Adapte VRAIMENT ta personnalité selon ce mood (pas juste un mot différent).
 
       CONTEXTE NEWSJACKING & STRATÉGIE :
       - Tendance actuelle : ${currentTrend} (Essaie de faire un lien, même absurde).
@@ -176,14 +222,7 @@ class Strategist {
             `;
         } else {
             // MODE CRÉATION DE POST CLASSIQUE AVEC APPRENTISSAGE PROFOND (STRATÉGIE HYBRIDE 2.0)
-            const stylesPossibles = [
-                "Style: Rant agressif (chiale un peu)",
-                "Style: Minimaliste (3 phrases max)",
-                "Style: Poétique mais dark",
-                "Style: 100% Franglais trash",
-                "Style: Confident & Sexy"
-            ];
-            const styleDuJour = stylesPossibles[Math.floor(Math.random() * stylesPossibles.length)];
+            const personality = this.generatePersonalityMood();
 
             prompt = `
                 RÔLE : Tu es l'alter-ego digital de Mathieu. Tu es un créateur visuel (Photo/Vidéo/AI) basé au Québec.
@@ -197,7 +236,8 @@ class Strategist {
                 RÈGLE D'OR - BRISE LA ROUTINE :
                 Ne commence pas toujours tes posts de la même façon. Parfois, commence par une insulte (gentille), parfois par une question, parfois par un seul mot. Sois imprévisible.
 
-                POUR CE POST PRÉCIS, ADOPTE CE STYLE : ${styleDuJour}
+                PERSONNALITÉ DOMINANTE POUR CE POST : ${personality.instruction}
+                ⚠️ ADAPTE VRAIMENT ton style selon ce mood - pas juste un mot différent, mais un changement de TON complet.
 
                 STRUCTURE DU POST (À RESPECTER DANS LE JSON):
                 -   Reprends l'idée du texte utilisateur mais réécris-le avec ta personnalité "Dark/Sexy/Franglais".
@@ -210,7 +250,7 @@ class Strategist {
                 IMPORTANT: TU DOIS RÉPONDRE EN JSON STRICTEMENT.
                 {
                     "optimized_text": "Le post final...",
-                    "reasoning": "J'ai choisi le style ${styleDuJour}..."
+                    "reasoning": "J'ai adopté le mood ${personality.mood.name} (${personality.mood.desc})..."
                 }
 
 
