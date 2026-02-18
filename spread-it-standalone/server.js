@@ -60,6 +60,7 @@ const app = express();
 const allowedOrigins = [
   'http://localhost:8080',
   'http://127.0.0.1:8080',
+  'https://chaud-devant.vercel.app',
   'https://chaud-devant.onlymatt.ca',
   'https://onlymatt.ca'
 ];
