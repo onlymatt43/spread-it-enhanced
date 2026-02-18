@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Spread It - Reaction Mode</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body { background: #0a0a0a; color: #fff; font-family: 'Inter', sans-serif; margin: 0; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    
+    .hero-input {
+      text-align: center;
+      margin: 80px 0;
+    }
+    .hero-input h1 { font-size: 3rem; margin-bottom: 20px; background: linear-gradient(45deg, #ff3366, #ffcc33); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    
+    .input-group {
+      display: flex;
+      max-width: 600px;
+      margin: 0 auto;
+      background: #222;
+      border-radius: 50px;
+      padding: 5px;
+      border: 1px solid #333;
+    }
+    .input-group input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #fff;
+      padding: 15px 25px;
+      font-size: 1.1rem;
+      outline: none;
+    }
+    .input-group button {
+      background: #fff;
+      color: #000;
+      border: none;
+      border-radius: 40px;
+      padding: 0 30px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .input-group button:hover { transform: scale(1.05); }
+
+    .loader { display: none; text-align: center; margin: 40px 0; font-size: 1.5rem; color: #666; }
+
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 30px;
+      margin-top: 50px;
+      display: none; /* hidden initially */
+    }
+
+    .card {
+      background: #161616;
+      border-radius: 20px;
+      padding: 25px;
+      border: 1px solid #333;
+      position: relative;
+      transition: transform 0.2s;
+    }
+    .card:hover { border-color: #555; }
+    
+    .card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+    .card-icon { font-size: 24px; }
+    .card-title { font-weight: bold; font-size: 1.2rem; }
+    
+    .card-agree { border-top: 4px solid #4CAF50; }
+    .card-disagree { border-top: 4px solid #F44336; }
+    .card-sarcasm { border-top: 4px solid #FF9800; }
+
+    .hook-badge { background: #333; color: #888; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
+
+    .card-content { line-height: 1.6; color: #ddd; margin-bottom: 20px; white-space: pre-wrap; }
+    
+    .copy-btn {
+      width: 100%;
+      background: #333;
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .copy-btn:hover { background: #444; }
+
+    .article-summary-box {
+      background: #111;
+      padding: 20px;
+      border-radius: 12px;
+      border-left: 3px solid #666;
+      margin-bottom: 40px;
+      color: #aaa;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="hero-input">
+    <h1>Reaction Mode</h1>
+    <p>Colle une URL, reçois 3 angles d'attaque instantanés.</p>
+    
+    <div class="input-group">
+      <input type="text" id="urlInput" placeholder="https://..." autocomplete="off">
+      <button onclick="analyze()">ANALYSER</button>
+    </div>
+  </div>
+
+  <div id="loader" class="loader">
+    <i class="fas fa-circle-notch fa-spin"></i> Analyse en cours... (ça chauffe)
+  </div>
+
+  <div id="summaryBox" class="article-summary-box"></div>
+
+  <div id="results" class="results-grid">
+    <!-- AGREE -->
+    <div class="card card-agree" id="card-agree">
+      <div class="card-header">
+        <span class="card-icon">✅</span>
+        <span class="card-title">L'Approche Validation</span>
+      </div>
+      <span class="hook-badge">HOOK</span>
+      <p class="card-content" style="font-weight: bold;" id="agree-hook">...</p>
+      <span class="hook-badge">CONTENU</span>
+      <p class="card-content" id="agree-content">...</p>
+      <button class="copy-btn" onclick="copyCard('agree')"><i class="fas fa-copy"></i> Copier tout</button>
+    </div>
+
+    <!-- DISAGREE -->
+    <div class="card card-disagree" id="card-disagree">
+      <div class="card-header">
+        <span class="card-icon">❌</span>
+        <span class="card-title">L'Approche Controverse</span>
+      </div>
+      <span class="hook-badge">HOOK</span>
+      <p class="card-content" style="font-weight: bold;" id="disagree-hook">...</p>
+      <span class="hook-badge">CONTENU</span>
+      <p class="card-content" id="disagree-content">...</p>
+      <button class="copy-btn" onclick="copyCard('disagree')"><i class="fas fa-copy"></i> Copier tout</button>
+    </div>
+
+    <!-- SARCASM -->
+    <div class="card card-sarcasm" id="card-sarcasm">
+      <div class="card-header">
+        <span class="card-icon">🤡</span>
+        <span class="card-title">L'Approche Vibe Check</span>
+      </div>
+      <span class="hook-badge">HOOK</span>
+      <p class="card-content" style="font-weight: bold;" id="sarcasm-hook">...</p>
+      <span class="hook-badge">CONTENU</span>
+      <p class="card-content" id="sarcasm-content">...</p>
+      <button class="copy-btn" onclick="copyCard('sarcasm')"><i class="fas fa-copy"></i> Copier tout</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let currentAnalysis = null;
+
+  async function analyze() {
+    const url = document.getElementById('urlInput').value;
+    if(!url) return alert('Hey, il faut une URL !');
+
+    document.getElementById('loader').style.display = 'block';
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('summaryBox').style.display = 'none';
+
+    try {
+      const res = await fetch('/api/analyze-reaction', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      });
+      
+      const data = await res.json();
+      
+      if(data.error) throw new Error(data.error);
+      
+      currentAnalysis = data.analysis; // Store for copy function
+      renderResults(data);
+
+    } catch (e) {
+      alert('Erreur: ' + e.message);
+    } finally {
+      document.getElementById('loader').style.display = 'none';
+    }
+  }
+
+  function renderResults(data) {
+    const { article, analysis } = data;
+    
+    // Summary
+    const summaryBox = document.getElementById('summaryBox');
+    summaryBox.innerHTML = `<strong>Source:</strong> ${article.title}<br><em>"${analysis.summary}"</em>`;
+    summaryBox.style.display = 'block';
+
+    // Map angles
+    const angles = analysis.angles; // Array of 3
+    
+    // Helper to find angle by type
+    const findAngle = (t) => angles.find(a => a.type === t) || {};
+
+    const agree = findAngle('agree');
+    const disagree = findAngle('disagree');
+    const sarcasm = findAngle('sarcasm');
+
+    // Fill DOM
+    document.getElementById('agree-hook').innerText = agree.hook;
+    document.getElementById('agree-content').innerText = agree.content_idea;
+
+    document.getElementById('disagree-hook').innerText = disagree.hook;
+    document.getElementById('disagree-content').innerText = disagree.content_idea;
+
+    document.getElementById('sarcasm-hook').innerText = sarcasm.hook;
+    document.getElementById('sarcasm-content').innerText = sarcasm.content_idea;
+    
+    document.getElementById('results').style.display = 'grid';
+  }
+
+  function copyCard(type) {
+    if(!currentAnalysis) return;
+    
+    const angle = currentAnalysis.angles.find(a => a.type === type);
+    if(!angle) return;
+
+    const hashtags = currentAnalysis.proven_hashtags.join(' ');
+    
+    const text = `${angle.hook}\n\n${angle.content_idea}\n\n${hashtags}`;
+    
+    navigator.clipboard.writeText(text).then(() => {
+        alert('Copié ! Va poster ça.');
+    });
+  }
+</script>
+
+</body>
+</html>

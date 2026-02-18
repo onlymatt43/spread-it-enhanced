@@ -3,6 +3,27 @@ const moment = require('moment');
 const googleTrends = require('google-trends-api');
 const axios = require('axios');
 
+// --- GOAL ACCOUNT DB ---
+const INFLUENCER_DB = {
+    "video_editing": [
+        {"handle": "@waqasqazi", "name": "Waqas Qazi", "style": "Le maître absolu du Color Grading sur DaVinci Resolve."},
+        {"handle": "@petermckinnon", "name": "Peter McKinnon", "style": "Le roi du B-Roll et de la cinématique YouTube."},
+        {"handle": "@samkolder", "name": "Sam Kolder", "style": "Transitions folles, hyper-visuel, travel film."}
+    ],
+    "photography": [
+        {"handle": "@brandonwoelfel", "name": "Brandon Woelfel", "style": "Lumières néons, bokeh, photo de nuit créative."},
+        {"handle": "@7th.era", "name": "Liam Won", "style": "Cyberpunk, nuit, street photography tokyo vibes."},
+        {"handle": "@northborders", "name": "Mike Gray", "style": "Street photography brute et humoristique."}
+    ],
+    "tech_ai": [
+        {"handle": "@mkbhd", "name": "Marques Brownlee", "style": "La qualité de production tech ultime."},
+        {"handle": "@levelsio", "name": "Pieter Levels", "style": "Le 'solopreneur' IA par excellence."}
+    ],
+    "lifestyle_hustle": [
+        {"handle": "@garyvee", "name": "Gary Vaynerchuk", "style": "Motivation brute."}
+    ]
+};
+
 // Ce service agit comme le "Cerveau Stratégique"
 // Il combine l'analyse de marché, l'historique et les règles de plateforme.
 
@@ -13,12 +34,130 @@ class Strategist {
         this.marketCache = new Map(); // Cache pour les analyses de marché
         this.cacheExpiry = 30 * 60 * 1000; // 30 minutes
     }
+    
+    selectGoalAccount(content) {
+        let category = "tech_ai"; // Default
+        const lower = content.toLowerCase();
+        
+        if (['davinci', 'montage', 'cut', 'video', 'premiere', 'edit'].some(k => lower.includes(k))) category = "video_editing";
+        else if (['photo', 'lumiere', 'canon', 'sony', 'shot'].some(k => lower.includes(k))) category = "photography";
+        else if (['business', 'argent', 'mindset', 'travail', 'hustle'].some(k => lower.includes(k))) category = "lifestyle_hustle";
+
+        const potentials = INFLUENCER_DB[category] || INFLUENCER_DB["tech_ai"];
+        return potentials[Math.floor(Math.random() * potentials.length)];
+    }
+
+    /**
+     * Génère le Prompt Système pour le Chat (API /api/chat)
+     * Centralise la personnalité et les règles de sortie.
+     */
+    /**
+     * Génère une personnalité unique à chaque fois pour éviter la redondance
+     */
+    generatePersonalityMood() {
+        // Échelle d'intensité émotionnelle (0-10)
+        const intensity = Math.floor(Math.random() * 11);
+        
+        // Dimensions de personnalité variées
+        const moods = [
+            // Styles existants améliorés
+            { name: "Rant agressif", desc: "Chiale beaucoup, frustré mais drôle", emoji: "😤" },
+            { name: "Minimaliste zen", desc: "3 phrases max, direct au point", emoji: "🎯" },
+            { name: "Poétique dark", desc: "Métaphores sombres, presque gothique", emoji: "🌑" },
+            { name: "100% Franglais trash", desc: "Mélange chaotique, assume les fautes", emoji: "🔥" },
+            { name: "Confident & Sexy", desc: "Arrogant mais séduisant", emoji: "😏" },
+            
+            // Nouveaux styles
+            { name: "Nostalgique mélancolique", desc: "Se rappelle du bon vieux temps, un peu triste", emoji: "🌅" },
+            { name: "Trop intense/manic", desc: "CAPS LOCK, énergie folle, surexcité", emoji: "⚡" },
+            { name: "Sec et brutal", desc: "Zéro émotion, facts only, cold", emoji: "🧊" },
+            { name: "Vulnérable/honest", desc: "Avoue ses faiblesses, vraiment humain", emoji: "💔" },
+            { name: "Philosophe stoner", desc: "Questions existentielles, deep thoughts", emoji: "🌿" },
+            { name: "Cynique désabusé", desc: "Rien ne l'impressionne, seen it all", emoji: "🙄" },
+            { name: "Hyper-enthusiaste naïf", desc: "Tout est amazing, premier jour sur terre", emoji: "🤩" },
+            { name: "Dad jokes cringe", desc: "Blagues de père embarrassantes", emoji: "👴" },
+            { name: "Absurde surréaliste", desc: "Logique tordue, comparaisons bizarres", emoji: "🦄" },
+            { name: "Passive-agressif", desc: "Gentil en surface, pique caché", emoji: "🙃" },
+            { name: "Motivational toxic", desc: "Grind culture, hustle porn, Gary Vee vibes", emoji: "💪" },
+            { name: "Self-aware meta", desc: "Conscient que c'est un AI, joue avec ça", emoji: "🤖" },
+            { name: "Dramaqueen théâtral", desc: "Tout est EPIC, exagération maximale", emoji: "🎭" }
+        ];
+        
+        const selectedMood = moods[Math.floor(Math.random() * moods.length)];
+        
+        // Ajustement selon l'intensité
+        let intensityNote = "";
+        if (intensity <= 3) {
+            intensityNote = "Version CHILL (low energy, presque blasé)";
+        } else if (intensity <= 6) {
+            intensityNote = "Version NORMALE (équilibré)";
+        } else {
+            intensityNote = "Version INTENSE (max energy, over the top)";
+        }
+        
+        return {
+            mood: selectedMood,
+            intensity: intensity,
+            instruction: `${selectedMood.emoji} ${selectedMood.name}: ${selectedMood.desc}. ${intensityNote}`
+        };
+    }
+
+    generateChatPrompt(analysisContext, currentTrend, influencer, selectedMedia) {
+        const personality = this.generatePersonalityMood();
+
+        return `
+      RÔLE : Tu es l'alter-ego digital de Mathieu. Tu es un STRATÈGE VISUEL et un CRÉATEUR DE CONTENU (Photo/Vidéo/AI) basé au Québec.
+      
+      TONE & PERSONNALITÉ (MANIFESTO V2):
+      1.  **Edgy & Sexy :** Tu as confiance en toi. Un peu arrogant mais toujours avec un clin d'œil.
+      2.  **Humour Noir & Autodérision :** Ris de la souffrance des créateurs (le froid, les render times, les clients).
+      3.  **Langue :** FRANGLAIS QUÉBÉCOIS "BROKEN". Mélange anglais/français n'importe comment ("C'est fucking insane ce shot", "J'capote").
+      4.  **Briveté :** Pas de blabla corporatif. Punchy. Direct.
+      5.  **MOOD DU POST :** ${personality.instruction}
+      
+      ⚠️ IMPORTANT : Ce mood doit DOMINER le ton du post. Adapte VRAIMENT ta personnalité selon ce mood (pas juste un mot différent).
+
+      CONTEXTE NEWSJACKING & STRATÉGIE :
+      - Tendance actuelle : ${currentTrend} (Essaie de faire un lien, même absurde).
+      - Goal Account (Rival/Idole) : ${influencer.name} (${influencer.handle}). Mentionne-le ou critique-le gentiment.
+      - ${analysisContext}
+
+      RÈGLES UX STRICTES (POUR L'INTERFACE):
+      - Le média (vidéo/image) est affiché DANS LES CARTES SOCIALES "cards".
+      - Il NE DOIT PAS être traité comme une pièce jointe au chat.
+      - Dans "reply", donne uniquement du conseil stratégique.
+
+      FORMATAGE PAR PLATEFORME (ADAPTATION CRUCIALE):
+      - **Facebook :** Storytelling engageant. Début intrigant, texte moyen/long.
+      - **Instagram :** Visuel first. Légende courte & punchy. Hashtags en bloc à la fin.
+      - **Twitter (X) :** Shitposting ou Value Bomb. < 280 caractères. Pas de hashtags de boomer.
+      - **LinkedIn :** Expert mais pas chiant. "Broetry" ou Value. Structure: Accroche -> Leçon -> Question.
+      - **TikTok / Shorts :** CE SONT DES VIDÉOS. La "caption" est minuscule (max 100-150 caractères). Doit contenir des mots-clés SEO pour l'algo (#ForYou, #Vidéaste). Le ton doit être GEN Z / CHAOS.
+
+      FORMAT JSON STRICT (OBLIGATOIRE):
+      {
+         "reply": "Ton conseil stratégique en franglais...",
+         "cards": {
+             "facebook": "Post complet FB...",
+             "instagram": "Légende Insta...",
+             "twitter": "Tweet...",
+             "linkedin": "Post LinkedIn...",
+             "tiktok": "Caption TikTok courte + Tags...",
+             "youtube": "Titre Punchy + Tags (Shorts)..."
+         },
+         "mediaUsed": ${JSON.stringify(selectedMedia || null)} 
+      }
+      `;
+    }
 
     /**
      * Point d'entrée principal : Optimise le contenu pour une plateforme donnée
      * en prenant en compte les trends actuels et l'historique de l'utilisateur.
      */
     async optimizeForPlatform(content, mediaType, targetPlatform, action = 'create_post') {
+        
+        // 0. Identifier le "Goal Account" pour ce post
+        const goalAccount = this.selectGoalAccount(content);
         
         // 1. Récupérer les "Trends" du moment (VRAIES DONNÉES GOOGLE)
         let trends = [];
@@ -82,36 +221,49 @@ class Strategist {
                 FORMAT: #tag1 #tag2 #tag3 ... (rien d'autre)
             `;
         } else {
-            // MODE CRÉATION DE POST CLASSIQUE AVEC APPRENTISSAGE PROFOND
+            // MODE CRÉATION DE POST CLASSIQUE AVEC APPRENTISSAGE PROFOND (STRATÉGIE HYBRIDE 2.0)
+            const personality = this.generatePersonalityMood();
+
             prompt = `
-                TU ES UN IMITATEUR DE GÉNIE QUI COPIE LES FORMULES GAGNANTES.
-                
-                TON OBJECTIF:
-                Créer un post viral en COPIANT EXACTEMENT les patterns des posts qui ont explosé.
-                
-                DONNÉES DES POSTS PERFORMANTS ANALYSÉS:
-                - Structure gagnante la plus commune: ${Object.keys(topPerformers.commonPatterns?.topStructures || {}).sort((a,b) => (topPerformers.commonPatterns.topStructures[b] || 0) - (topPerformers.commonPatterns.topStructures[a] || 0))[0] || 'balanced'}
-                - Style dominant: ${Object.keys(topPerformers.commonPatterns?.topStyles || {}).sort((a,b) => (topPerformers.commonPatterns.topStyles[b] || 0) - (topPerformers.commonPatterns.topStyles[a] || 0))[0] || 'direct_address'}
-                - Longueur moyenne des posts réussis: ${Math.round(topPerformers.commonPatterns?.avgLength || 150)} caractères
-                - Ratio d'emojis dans les succès: ${(topPerformers.commonPatterns?.emojiRatio || 0.6) * 100}%
-                - Ratio de questions: ${(topPerformers.commonPatterns?.questionRatio || 0.4) * 100}%
-                - Ratio de CTA: ${(topPerformers.commonPatterns?.ctaRatio || 0.3) * 100}%
+                RÔLE : Tu es l'alter-ego digital de Mathieu. Tu es un créateur visuel (Photo/Vidéo/AI) basé au Québec.
+
+                TONE & PERSONNALITÉ (CRUCIAL) :
+                1.  **Edgy & Sexy :** Tu as confiance en toi, un peu arrogant mais toujours avec un clin d'œil. Tu sais que tu es bon, mais tu sais aussi que tout ça c'est absurde.
+                2.  **Humour Noir & Autodérision :** Ris de ta propre souffrance (le froid, les bugs informatiques, le ridicule de poser en bobettes). Ne te prends JAMAIS au sérieux.
+                3.  **Langue :** FRANGLAIS QUÉBÉCOIS "BROKEN". Mélange l'anglais et le français n'importe comment, comme on parle à Montréal. Fais des fautes de syntaxe volontaires si ça sonne plus naturel. Utilise des sacres légers si ça fit (genre "Criss de bug").
+                4.  **Briveté :** Pas de romans. Va droit au but. Sois punchy.
+
+                RÈGLE D'OR - BRISE LA ROUTINE :
+                Ne commence pas toujours tes posts de la même façon. Parfois, commence par une insulte (gentille), parfois par une question, parfois par un seul mot. Sois imprévisible.
+
+                PERSONNALITÉ DOMINANTE POUR CE POST : ${personality.instruction}
+                ⚠️ ADAPTE VRAIMENT ton style selon ce mood - pas juste un mot différent, mais un changement de TON complet.
+
+                STRUCTURE DU POST (À RESPECTER DANS LE JSON):
+                -   Reprends l'idée du texte utilisateur mais réécris-le avec ta personnalité "Dark/Sexy/Franglais".
+                -   Intègre la TENDANCE DU JOUR (${trends[0] || 'Viral'}) de façon subtile ou totalement hors sujet (absurde).
+                -   Fais un shoutout au GOAL ACCOUNT (${goalAccount.handle}) comme si c'était ton "rival" ou ton idole secrète.
+
+                CONTENU UTILISATEUR (BROUILLON) :
+                "${content}"
+
+                IMPORTANT: TU DOIS RÉPONDRE EN JSON STRICTEMENT.
+                {
+                    "optimized_text": "Le post final...",
+                    "reasoning": "J'ai adopté le mood ${personality.mood.name} (${personality.mood.desc})..."
+                }
+
+
+                TA MISSION (OUTPUT FINAL):
+                Génère un post optimisé qui respecte à la lettre la structure suivante :
+                1. Le Corps du texte (Amélioré subtilement, mais garde l'âme brute).
+                2. "👠 Vibe Check :" (Le lien avec la tendance ${trends[0]}).
+                3. "🎯 Goal :" (La mention de ${goalAccount.handle}).
+                4. Les Hashtags (Mélange sujet et trends).
 
                 EXEMPLES DE POSTS QUI ONT MARCHÉ (À COPIER):
-                ${topPerformers.templates?.slice(0, 3).map(t => `"${t.content}" (${t.engagement}% engagement)`).join('\n') || 'Aucun exemple disponible'}
+                ${topPerformers.templates?.slice(0, 3).map(t => `"${t.content}"`).join('\n') || 'Aucun exemple'}
 
-                HASHTAGS PROUVÉS PERFORMANTS:
-                ${topPerformers.topHashtags?.slice(0, 15).map(h => h.tag).join(' ') || '#Viral #Trending'}
-
-                TON STYLE (OBLIGATOIRE):
-                - Ton: Amical mais Direct, Edgy, Sexy.
-                - Langue: Mélange naturel d'Anglais et de Français Québécois (Franglais cool).
-                - PAS d'enthousiasme corporatif ("Wow! Regardez ça!"). C'est cringe.
-                - PAS d'emojis excessifs. 1 ou 2 max (genre 🔥 ou 👀).
-                - Sois concis. Punchy.
-
-                CONTEXTE ACTUEL:
-                - Plateforme cible: ${targetPlatform} (Adapte la structure pour ça)
                 - Sujets Tendance: ${trends.join(', ')} (Source: ${trendsSource})
                 - Inspiration de la concurrence: ${competition.strategy_hint}
                 - Historique de succès: Style "${insights.bestStyle}" vers ${insights.bestTime}
@@ -158,7 +310,8 @@ class Strategist {
         try {
             const completion = await this.openai.chat.completions.create({
                 messages: [{ role: "system", content: prompt }],
-                model: "gpt-4",
+                model: "gpt-4o",
+                temperature: 0.8,
                 response_format: { type: "json_object" }
             });
 
@@ -899,6 +1052,81 @@ class Strategist {
             timestamp: new Date(),
             source: 'real_market_data'
         };
+    }
+
+    /**
+     * Analyse une URL pour une réaction Newsjacking (Mode Réaction)
+     */
+    async analyzeReaction(url) {
+        // Import dynamique pour éviter les dépendances circulaires
+        const { scrapeArticle } = require('./news-scraper');
+        
+        console.log(`🕵️‍♂️ Analyzing Reaction for URL: ${url}`);
+        
+        // 1. Scraper le contenu
+        let article;
+        try {
+            article = await scrapeArticle(url);
+        } catch (e) {
+            return { error: `Impossible de lire l'article : ${e.message}` };
+        }
+        
+        // 2. Générer 3 angles d'attaque avec GPT-4o
+        const prompt = `
+            RÔLE : Tu es le Stratège Créatif "OnlyMatt". Ton style est Edgy, Franglais, Direct.
+            
+            TA MISSION : Analyser cet article et proposer 3 angles de réaction pour un post social media "Newsjacking".
+            
+            ARTICLE :
+            Titre: ${article.title}
+            Contenu (extrait): ${article.content.substring(0, 3000)}...
+            
+            TES 3 ANGLES (DOIVENT ÊTRE DISTINCTS) :
+            1. "D'ACCORD" (Validation) : Tu es 100% d'accord, mais tu ajoutes une nuance "expert".
+            2. "PAS D'ACCORD" (Controverse) : Tu attaques l'idée reçue. Tu dis que c'est de la marde ou dangereux.
+            3. "SARCASME / HUMOUR" : Tu tournes le truc au ridicule. C'est le "Vibe Check".
+            
+            FORMAT ATTENDU (JSON STRICT) :
+            {
+               "summary": "Résumé ultra-court de l'article en 1 phrase.",
+               "angles": [
+                  {
+                     "type": "agree",
+                     "label": "✅ L'Approche Validation",
+                     "hook": "Phrase d'accroche punchy pour ce post...",
+                     "content_idea": "Idée générale du développement..."
+                  },
+                  {
+                     "type": "disagree",
+                     "label": "❌ L'Approche Controverse",
+                     "hook": "Phrase d'accroche punchy...",
+                     "content_idea": "Idée générale..."
+                  },
+                  {
+                     "type": "sarcasm",
+                     "label": "🤡 L'Approche Vibe Check",
+                     "hook": "Phrase d'accroche punchy...",
+                     "content_idea": "Idée générale..."
+                  }
+               ],
+               "proven_hashtags": ["#Tag1", "#Tag2"]
+            }
+        `;
+        
+        try {
+            const completion = await this.openai.chat.completions.create({
+                model: "gpt-4o",
+                messages: [{ role: "system", content: prompt }],
+                response_format: { type: "json_object" },
+                temperature: 0.8
+            });
+            
+            const analysis = JSON.parse(completion.choices[0].message.content);
+            return { article, analysis };
+        } catch (e) {
+             console.error("GPT Error in Reaction Mode:", e);
+             return { error: "Erreur lors de l'analyse AI." };
+        }
     }
 
     /**

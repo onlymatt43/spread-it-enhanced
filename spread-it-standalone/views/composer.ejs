@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="tiktok-developers-site-verification" content="GGobiyjEeuSj91JYUK5ahCBql8mU8t68">
   <title><%= title %></title>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/css/composer.css">
@@ -17,39 +18,428 @@
     </div>
   </header>
 
-  <main class="composer-stage chat-mode">
-    <!-- Chat Interface (Central) -->
-    <div class="chat-container">
+
+<!-- LOAD FONTS & ICONS FOR MOCKUPS -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<style>
+/* SPLIT VIEW LAYOUT */
+.composer-split-view {
+    display: flex;
+    height: 100vh;
+    padding-top: 60px; /* Topbar height */
+    overflow: hidden;
+    background: #000;
+}
+
+/* LEFT: CHAT SIDEBAR */
+.chat-sidebar {
+    width: 320px;
+    flex-shrink: 0;
+    border-right: 1px solid #333;
+    display: flex;
+    flex-direction: column;
+    background: #111;
+}
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+.chat-input-area {
+    padding: 15px;
+    background: #1a1a1a;
+    border-top: 1px solid #333;
+}
+.message { font-size: 14px; line-height: 1.4; color: #eee; }
+.message.ai .bubble { background: #222; padding: 10px; border-radius: 8px; border-left: 3px solid #3b82f6; }
+.message.user { align-self: flex-end; }
+.message.user .bubble { background: #3b82f6; color: white; padding: 8px 12px; border-radius: 12px 12px 0 12px; }
+
+/* PREVIEW DECK GRID */
+.preview-deck {
+    flex: 1;
+    overflow-y: auto;
+    padding: 30px;
+    background: #050505;
+    /* On change la grille pour permettre des tailles variées */
+    display: flex;
+    flex-wrap: wrap;
+    gap: 30px;
+    align-content: start;
+    align-items: flex-start; /* Important pour aligner en haut */
+}
+
+/* BASE CARD */
+.mockup-card {
+    background: #000;
+    border: 1px solid #333;
+    border-radius: 12px;
+    overflow: hidden;
+    color: white;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    position: relative;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    /* Largeur par défaut pour FB, LI, Twitter */
+    width: 380px; 
+    max-width: 100%;
+}
+
+/* SPECIAL SIZES FOR VERTICAL PLATFORMS */
+.mockup-card[data-platform="tiktok"],
+.mockup-card[data-platform="youtube"] {
+    width: 300px; /* Plus étroit, comme un téléphone */
+    border-radius: 20px; /* Plus arrondi pour imiter un écran */
+    border: 4px solid #333; /* Bordure style "téléphone" */
+}
+
+/* Status Overlay */
+.account-status-overlay {
+    background: rgba(220, 38, 38, 0.9);
+    padding: 8px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: bold;
+    display: none; /* hidden by default */
+}
+.mockup-card.disconnected .account-status-overlay { display: block; }
+.mockup-card.disconnected .mockup-content { opacity: 0.3; pointer-events: none; }
+/* Disable action button when disconnected */
+.mockup-card.disconnected .card-action-bar button {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+    background: #333;
+}
+.mockup-card.disconnected .card-action-bar button::after {
+    content: " (Non connecté)";
+    font-size: 0.9em;
+}
+
+/* SPECIAL LAYOUTS */
+
+/* TIKTOK & SHORTS: FULL SCREEN IMMERSIVE */
+.mockup-card[data-platform="tiktok"] .mockup-content,
+.mockup-card[data-platform="youtube"] .mockup-content {
+    height: 533px; /* Ratio 9:16 approx pour width 300 */
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end; /* Texte en bas */
+    position: relative;
+    padding: bottom: 60px;
+}
+
+.mockup-card[data-platform="tiktok"] .media-area,
+.mockup-card[data-platform="youtube"] .media-area {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+}
+.mockup-card[data-platform="tiktok"] .media-area video,
+.mockup-card[data-platform="youtube"] .media-area video {
+    width: 100%; height: 100%; object-fit: cover;
+}
+/* Overlay gradient pour que le texte soit lisible sur la vidéo */
+.mockup-card[data-platform="tiktok"] .mockup-content::after,
+.mockup-card[data-platform="youtube"] .mockup-content::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 150px;
+    background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* Elements on top of video */
+.mockup-card[data-platform="tiktok"] .header,
+.mockup-card[data-platform="youtube"] .header {
+    position: absolute;
+    top: 10px; left: 10px;
+    z-index: 2;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+.mockup-card[data-platform="tiktok"] .body,
+.mockup-card[data-platform="youtube"] .body {
+    position: relative;
+    z-index: 2;
+    margin-bottom: 50px; /* Place pour les boutons d'action */
+    padding: 10px;
+    font-size: 13px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+
+/* Facebook Style (2025) */
+.facebook-style { background: #242526; border-color: #3e4042; }
+.facebook-style .header { padding: 12px 16px; display: flex; align-items: start; gap: 10px; }
+.facebook-style .avatar { width: 40px; height: 40px; border-radius: 50%; background: #444; flex-shrink:0; }
+.facebook-style .meta { flex: 1; display:flex; flex-direction:column; justify-content:center; }
+.facebook-style .name { font-weight: 600; font-size: 15px; color:#e4e6eb; line-height:1.2; }
+.facebook-style .time { font-size: 13px; color: #b0b3b8; display:flex; align-items:center; gap:4px; margin-top:2px; }
+.facebook-style .body { padding: 0 16px 16px; font-size: 15px; color: #e4e6eb; white-space: pre-wrap; line-height:1.4; outline: none; }
+.facebook-style .media-area { width: 100%; background: #000; overflow: hidden; display: block; position: relative; }
+.facebook-style .media-area img, .facebook-style .media-area video { width: 100%; height: auto; display: block; max-height: 500px; object-fit: contain; }
+.facebook-style .footer { padding: 0 16px; height: 44px; border-top: 1px solid #3e4042; display: flex; align-items: center; justify-content: space-between; color: #b0b3b8; font-weight: 600; font-size: 14px; }
+.facebook-style .footer > span { flex:1; display:flex; align-items:center; justify-content:center; gap:8px; height:36px; border-radius:4px; cursor:pointer; }
+.facebook-style .footer > span:hover { background: rgba(255,255,255,0.1); }
+
+/* Instagram Style (2025) */
+.instagram-style { background: #000; border: 1px solid #363636; border-radius: 8px; }
+.instagram-style .header { padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; height: 56px; box-sizing: border-box; }
+.instagram-style .header-left { display: flex; align-items: center; gap: 10px; }
+.instagram-style .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(45deg, #f09433, #e6683c); padding: 2px; flex-shrink: 0; box-sizing: border-box; }
+.instagram-style .avatar-inner { width: 100%; height: 100%; border-radius: 50%; background: #000; border: 2px solid #000; }
+.instagram-style .name { font-weight: 600; font-size: 14px; color: #fff; }
+.instagram-style .media-area { width: 100%; aspect-ratio: 4/5; background: #111; position: relative; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+.instagram-style .media-area img, .instagram-style .media-area video { width: 100%; height: 100%; object-fit: cover; }
+.instagram-style .actions { padding: 12px; display: flex; justify-content: space-between; align-items: center; }
+.instagram-style .actions-left { display: flex; gap: 16px; }
+.instagram-style .actions i { font-size: 24px; color: #fff; cursor: pointer; }
+.instagram-style .actions i:hover { opacity: 0.7; }
+.instagram-style .caption-area { padding: 0 12px 12px; font-size: 14px; line-height: 1.4; }
+.instagram-style .caption-body { color: #f5f5f5; outline: none; }
+.instagram-style .more { color: #a8a8a8; cursor: pointer; }
+
+/* LinkedIn Style (2025) */
+.linkedin-style { background: #1b1f23; border: 1px solid #333; border-radius: 8px; }
+.linkedin-style .header { padding: 12px 16px; display: flex; gap: 10px; align-items: flex-start; }
+.linkedin-style .avatar { width: 48px; height: 48px; background: #444; border-radius: 50%; flex-shrink: 0; }
+.linkedin-style .meta-col { display: flex; flex-direction: column; }
+.linkedin-style .name { font-weight: 600; font-size: 14px; color: #fff; line-height: 1.2; }
+.linkedin-style .role { font-size: 12px; color: #ccc; margin-top: 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 200px; }
+.linkedin-style .time { font-size: 12px; color: #aaa; margin-top: 2px; }
+.linkedin-style .body { padding: 0 16px 10px; font-size: 14px; color: #e1e9ee; outline: none; line-height: 1.5; white-space: pre-wrap; }
+.linkedin-style .media-area { width: 100%; background: #000; display: block; overflow: hidden; }
+.linkedin-style .media-area img, .linkedin-style .media-area video { width: 100%; height: auto; display: block; }
+.linkedin-style .footer { padding: 4px 12px; border-top: 1px solid #333; display: flex; justify-content: space-between; align-items: center; min-height: 48px; }
+.linkedin-style .footer > span { display: flex; flex-direction: column; align-items: center; gap: 4px; color: #e1e9ee; font-size: 12px; font-weight: 600; padding: 10px 8px; border-radius: 4px; cursor: pointer; }
+.linkedin-style .footer > span i { font-size: 20px; color: #e1e9ee; }
+.linkedin-style .footer > span:hover { bg: rgba(255,255,255,0.1); }
+
+/* Twitter Style (2025) */
+.twitter-style { background: #000; border: 1px solid #2f3336; border-radius: 12px; padding-bottom: 8px; }
+.twitter-style .mockup-content { padding: 12px 16px; display: grid; grid-template-columns: 40px 1fr; gap: 12px; }
+.twitter-style .avatar { width: 40px; height: 40px; border-radius: 50%; background: #333; }
+.twitter-style .right-col { display: flex; flex-direction: column; width: 100%; min-width: 0; }
+.twitter-style .header { padding: 0; display: flex; gap: 4px; align-items: baseline; margin-bottom: 2px; }
+.twitter-style .name { font-weight: 700; font-size: 15px; color: #e7e9ea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.twitter-style .handle { color: #71767b; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.twitter-style .dot { color: #71767b; font-size: 15px; }
+.twitter-style .time { color: #71767b; font-size: 15px; }
+.twitter-style .body { padding: 0; margin: 0; font-size: 15px; line-height: 1.3; color: #e7e9ea; outline: none; white-space: pre-wrap; margin-bottom: 12px; }
+.twitter-style .media-container { width: 100%; border-radius: 16px; border: 1px solid #2f3336; overflow: hidden; margin-bottom: 12px; }
+.twitter-style .media-container img, .twitter-style .media-container video { width: 100%; height: auto; display: block; max-height: 400px; object-fit: cover; }
+.twitter-style .footer { padding: 0; margin: 0; display: flex; justify-content: space-between; color: #71767b; font-size: 13px; max-width: 400px; }
+.twitter-style .footer i { font-size: 18px; cursor: pointer; transition: color 0.2s; }
+.twitter-style .footer div { display: flex; align-items: center; gap: 8px; }
+.twitter-style .footer div:hover i, .twitter-style .footer div:hover span { color: #1d9bf0; }
+.twitter-style .footer div:nth-child(3):hover i { color: #f91880; } /* Like heart color */
+
+/* Action Footer */
+.card-action-bar {
+    padding: 10px;
+    background: #111;
+    border-top: 1px solid #333;
+    display: flex;
+    justify-content: flex-end;
+}
+.btn-share-real {
+    background: #3b82f6;
+    color: white;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 14px;
+}
+.btn-share-real:hover { background: #2563eb; }
+.btn-share-real:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.warning-box {
+    background: #450a0a; color: #fecaca; padding: 10px; font-size: 12px; margin: 10px; border-radius: 6px; display: none;
+}
+</style>
+
+  <main class="composer-split-view">
+    <!-- LEFT: AI CHAT -->
+    <aside class="chat-sidebar">
         <div class="chat-messages" id="chatMessages">
-            <!-- Welcome Message -->
             <div class="message ai">
-                <div class="avatar">🤖</div>
                 <div class="bubble">
-                    Bonjour ! Je suis votre assistant Spread It. <br>
-                    Écrivez-moi simplement votre idée de post, ou collez un texte brut. Je vais l'analyser, l'optimiser pour chaque réseau social et vous proposer les meilleures versions.
+                    <strong>Mode Éditeur Live 🔴</strong><br>
+                    Pour que ce soit parfait, je vous montre le résultat exact tel qu'il apparaîtra sur vos réseaux à droite.<br><br>
+                    Dites-moi ou collez votre texte, et je mettrai à jour les prévisualisations en temps réel.
                 </div>
             </div>
-            
-            <!-- Cards will be injected here dynamically by AI -->
         </div>
-
         <div class="chat-input-area">
-            <textarea id="userPrompt" class="chat-textarea" placeholder="Ex: Rédige un post sur le lancement de la nouvelle collection..." rows="1"></textarea>
-            <button id="sendMessage" class="btn-send">Envoyer ➤</button>
+            <textarea id="userPrompt" class="chat-textarea" placeholder="Votre instruction ici..." style="width:100%; background:#222; color:white; border:none; padding:10px; border-radius:8px;" rows="2"></textarea>
+            <button id="sendMessage" style="width:100%; margin-top:10px; background:#3b82f6; color:white; border:none; padding:10px; border-radius:6px; cursor:pointer">Générer les Previews ➤</button>
         </div>
-    </div>
+    </aside>
 
-    <!-- Hidden Container for generated cards (moved into chat stream logically) -->
-    <div id="hidden-structure" style="display:none;">
-    <!-- Original editor structure kept for logic binding but hidden -->
-      <div class="cards-stack" id="cardsStack">
-        <div class="post-card top-card card-1" id="activeCard">
-          <div class="card-body">
-            <div id="postEditor" class="editor" contenteditable="true"></div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- RIGHT: PREVIEW DECK -->
+    <section class="preview-deck">
+        
+        <!-- FACEBOOK CARD -->
+        <article class="mockup-card facebook-style" id="preview-facebook" data-platform="facebook">
+            <div class="account-status-overlay">🔴 Compte Facebook non connecté</div>
+            <div class="mockup-content">
+                <div class="header">
+                    <div class="avatar" style="position:relative;">
+                        <i class="fab fa-facebook" style="position:absolute; bottom:-4px; right:-4px; color:#1877f2; background:white; border-radius:50%; font-size:16px;"></i>
+                    </div>
+                    <div class="meta">
+                        <span class="name">Your Page</span>
+                        <div class="time">Just now · <i class="fas fa-globe-americas"></i></div>
+                    </div>
+                    <i class="fas fa-ellipsis-h" style="color:#b0b3b8"></i>
+                </div>
+                <div class="body post-text" contenteditable="true">En attente de contenu...</div>
+                <div class="media-area platform-card-media"></div>
+                <div class="footer">
+                    <span><i class="far fa-thumbs-up"></i> J'aime</span>
+                    <span><i class="far fa-comment-alt"></i> Commenter</span>
+                    <span><i class="fas fa-share"></i> Partager</span>
+                </div>
+            </div>
+            <div class="card-action-bar">
+                <button class="btn-share-real" onclick="window.SpreadIt.triggerShare(this, 'facebook')"><i class="fab fa-facebook-f"></i> Publier Facebook</button>
+            </div>
+        </article>
+
+        <!-- INSTAGRAM CARD (UPDATED) -->
+        <article class="mockup-card instagram-style" id="preview-instagram" data-platform="instagram">
+            <div class="account-status-overlay">🔴 Compte Instagram non connecté</div>
+            <div class="mockup-content">
+                <div class="header">
+                    <div class="header-left">
+                        <div class="avatar"><div class="avatar-inner"></div></div>
+                        <span class="name">you_official</span>
+                    </div>
+                    <i class="fas fa-ellipsis-h" style="color:white"></i>
+                </div>
+                <!-- Media Area -->
+                <div class="media-area platform-card-media">
+                    <span style="color:#666; font-size:12px; position:absolute;">Média Apparaît Ici</span>
+                </div>
+                <div class="actions">
+                    <div class="actions-left">
+                        <i class="far fa-heart"></i>
+                        <i class="far fa-comment"></i>
+                        <i class="far fa-paper-plane"></i>
+                    </div>
+                    <i class="far fa-bookmark"></i>
+                </div>
+                <div class="caption-area">
+                    <span style="font-weight:600">votre_compte</span>
+                    <span class="caption-body post-text" contenteditable="true">En attente de contenu...</span>
+                    <div class="more">plus</div>
+                </div>
+            </div>
+            <div class="card-action-bar">
+                <button class="btn-share-real" onclick="window.SpreadIt.triggerShare(this, 'instagram')"><i class="fab fa-instagram"></i> Publier Instagram</button>
+            </div>
+        </article>
+
+        <!-- LINKEDIN CARD (UPDATED) -->
+        <article class="mockup-card linkedin-style" id="preview-linkedin" data-platform="linkedin">
+            <div class="account-status-overlay">🔴 Compte LinkedIn non connecté</div>
+            <div class="mockup-content">
+                <div class="header">
+                    <div class="avatar" style="position:relative;">
+                        <i class="fab fa-linkedin" style="position:absolute; bottom:-4px; right:-4px; color:#0a66c2; background:white; border-radius:3px; font-size:16px;"></i>
+                    </div>
+                    <div class="meta-col">
+                        <div class="name">Your Name</div>
+                        <div class="role">Expert en Stratégie Digitale • Créateur de Contenu IA</div>
+                        <div class="time">Juste maintenant • <i class="fas fa-globe-americas"></i></div>
+                    </div>
+                    <i class="fas fa-ellipsis-h" style="color:#e1e9ee; margin-left:auto;"></i>
+                </div>
+                <div class="body post-text" contenteditable="true">En attente de contenu...</div>
+                <div class="media-area platform-card-media"></div>
+                <div class="footer">
+                    <span><i class="far fa-thumbs-up"></i> J'aime</span>
+                    <span><i class="far fa-comment-dots"></i> Commenter</span>
+                    <span><i class="fas fa-retweet"></i> Republier</span>
+                    <span><i class="fas fa-paper-plane"></i> Envoyer</span>
+                </div>
+            </div>
+            <div class="card-action-bar">
+                <button class="btn-share-real" onclick="window.SpreadIt.triggerShare(this, 'linkedin')"><i class="fab fa-linkedin-in"></i> Publier LinkedIn</button>
+            </div>
+        </article>
+
+        <!-- TWITTER CARD (UPDATED) -->
+        <article class="mockup-card twitter-style" id="preview-twitter" data-platform="twitter">
+            <div class="account-status-overlay">🔴 Compte Twitter/X non connecté</div>
+            <div class="mockup-content">
+                <div class="avatar" style="background:#333 url('https://abs.twimg.com/sticky/default_profile_images/default_profile_400x400.png') center/cover;"></div>
+                <div class="right-col">
+                    <div class="header">
+                        <span class="name">You</span>
+                        <span class="handle">@yourhandle</span>
+                        <span class="dot">·</span>
+                        <span class="time">1m</span>
+                    </div>
+                    <div class="body post-text" contenteditable="true">En attente de contenu...</div>
+                    <div class="media-container platform-card-media"></div>
+                    <div class="footer">
+                        <div><i class="far fa-comment"></i> <span>0</span></div>
+                        <div><i class="fas fa-retweet"></i> <span>0</span></div>
+                        <div><i class="far fa-heart"></i> <span>0</span></div>
+                        <div><i class="far fa-chart-bar"></i> <span>0</span></div>
+                        <div><i class="fas fa-share"></i></div>
+                    </div>
+                </div>
+            </div>
+             <div class="card-action-bar">
+                <button class="btn-share-real" onclick="window.SpreadIt.triggerShare(this, 'twitter')"><i class="fab fa-x-twitter"></i> Tweeter</button>
+            </div>
+        </article>
+        
+        <!-- YOUTUBE SHORTS CARD (NEW) -->
+        <article class="mockup-card" id="preview-youtube" data-platform="youtube" style="background:#000; border:1px solid #333; border-radius:12px; overflow:hidden;">
+             <div class="account-status-overlay">🔴 Chaîne YouTube non connectée</div>
+             <div class="mockup-content" style="display:flex; flex-direction:column;">
+                <div class="header" style="padding:10px; display:flex; align-items:center; gap:10px;">
+                     <div class="avatar" style="width:32px; height:32px; background:#ff0000; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:10px;"><i class="fab fa-youtube"></i></div>
+                     <span class="name" style="font-weight:bold; font-size:14px;">YouTube Shorts</span>
+                </div>
+                <div class="media-area platform-card-media" style="position:relative; width:100%; aspect-ratio:9/16; background:#111; display:flex; align-items:center; justify-content:center;">
+                    <span style="color:#666;">Video Preview</span>
+                </div>
+                <div class="body post-text" style="padding:10px; font-size:14px; color:#fff;" contenteditable="true">Title / Caption...</div>
+             </div>
+             <div class="card-action-bar">
+                <button class="btn-share-real" onclick="window.SpreadIt.triggerShare(this, 'youtube')"><i class="fab fa-youtube"></i> Upload Short</button>
+            </div>
+        </article>
+                
+        <!-- TIKTOK CARD (NEW) -->
+        <article class="mockup-card" id="preview-tiktok" data-platform="tiktok" style="background:#000; border:1px solid #333; border-radius:12px; overflow:hidden;">
+             <div class="account-status-overlay">🔴 Compte TikTok non connecté</div>
+             <div class="mockup-content" style="display:flex; flex-direction:column;">
+                <div class="header" style="padding:10px; display:flex; align-items:center; gap:10px;">
+                     <div class="avatar" style="width:32px; height:32px; background:#000; border:1px solid #333; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:14px;"><i class="fab fa-tiktok"></i></div>
+                     <span class="name" style="font-weight:bold; font-size:14px;">TikTok</span>
+                </div>
+                <div class="media-area platform-card-media" style="position:relative; width:100%; aspect-ratio:9/16; background:#111; display:flex; align-items:center; justify-content:center;">
+                     <span style="color:#666;">Video Preview</span>
+                </div>
+                <div class="body post-text" style="padding:10px; font-size:14px; color:#fff;" contenteditable="true">Caption...</div>
+             </div>
+             <div class="card-action-bar">
+                <button class="btn-share-real" onclick="window.SpreadIt.triggerShare(this, 'tiktok')"><i class="fab fa-tiktok"></i> Post TikTok</button>
+            </div>
+        </article>
+
+    </section>
   </main>
 
   <!-- Platform cards template for Chat Injection -->
@@ -84,7 +474,13 @@
 
         </div>
         <div class="mini-actions">
+           <!-- Copier le texte -->
            <button class="btn-xs ghost action-copy" onclick="copyToClipboard(this)">Copier</button>
+           
+           <!-- Boutons de partage direct -->
+           <button class="btn-xs action-share" onclick="window.SpreadIt.triggerShare(this, '<%= p %>')">
+               Partager 🚀
+           </button>
         </div>
       </article>
     <% }); %>
@@ -98,48 +494,143 @@
     
     // Auto-resize textarea
     const tx = document.getElementById('userPrompt');
-    tx.addEventListener("input", function(){
-      this.style.height = 'auto';
-      this.style.height = (this.scrollHeight) + 'px';
-    });
+    if(tx) {
+        tx.addEventListener("input", function(){
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+        });
+        tx.addEventListener('keydown', (e) => {
+            if(e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+            }
+        });
+    }
+
+    // Expose Share Trigger Globally
+    window.SpreadIt = window.SpreadIt || {};
+    window.SpreadIt.triggerShare = function(btn, platform) {
+        const card = btn.closest('.mini-card');
+        const textElement = card.querySelector('.sp-text-preview');
+        const content = textElement ? textElement.innerText : '';
+        
+        if (!content || content === '...') {
+            alert('Veuillez d\'abord générer du contenu avec l\'IA.');
+            return;
+        }
+
+        // Disable button to prevent double-click
+        const originalText = btn.innerText;
+        btn.innerText = 'Envoi...';
+        btn.disabled = true;
+
+        // Payload for smart-share endpoint
+        const payload = {
+            mediaUrl: window.CURRENT_VIDEO_URL || window.CURRENT_POSTER || null,
+            mediaType: window.CURRENT_VIDEO_URL ? 'video' : 'image',
+            caption: content,
+            platforms: [platform],
+            hashtags: [] 
+        };
+
+        fetch('/api/smart-share-submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                btn.innerText = '✅ Publié !';
+                btn.classList.add('success');
+            } else {
+                btn.innerText = 'Erreur';
+                // Show error details if available
+                let msg = data.message || 'Erreur inconnue';
+                if(data.errors && data.errors.length) msg += '\n' + data.errors[0].error;
+                alert('Echec du partage : ' + msg);
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            btn.innerText = 'Erreur Réseau';
+            alert('Impossible de contacter le serveur.');
+        })
+        .finally(() => {
+            // Re-enable button after delay if needed (or leave as Published)
+            setTimeout(() => {
+                if(btn.innerText !== '✅ Publié !') {
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                }
+            }, 3000);
+        });
+    };
 
     // Simple script to handle Chat logic -> UI
-    document.getElementById('sendMessage').addEventListener('click', () => handleSend());
-    tx.addEventListener('keydown', (e) => {
-        if(e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSend();
-        }
-    });
+    const sendBtn = document.getElementById('sendMessage');
+    if(sendBtn) sendBtn.addEventListener('click', () => handleSend());
 
-    // --- AUTO-DETECT PREFILLED CONTENT (Video / Media) ---
+    // --- AUTO-DETECT PREFILLED CONTENT (Video / Media / Meta) ---
     document.addEventListener('DOMContentLoaded', () => {
         const params = new URLSearchParams(window.location.search);
         const prefill = params.get('prefill');
-        const videoUrl = params.get('video_url');
-        const posterUrl = params.get('poster');
+        const videoUrl = params.get('video_url'); // Priority 1
+        const posterUrl = params.get('poster');   // Priority 2
         const title = params.get('title');
         const description = params.get('description');
+        const keywords = params.get('keywords');
+        const author = params.get('author');
         
-        // Store poster globally for previews
-        if(posterUrl) window.CURRENT_POSTER = posterUrl;
-        if(videoUrl) window.CURRENT_VIDEO_URL = videoUrl;
-        if(title) window.CURRENT_TITLE = title;
+        // --- 1. MEDIA PRIORITY LOGIC ---
+        // Always try to use video first, if explicitly provided.
+        if(videoUrl && videoUrl !== 'undefined' && videoUrl !== 'null') {
+             window.CURRENT_VIDEO_URL = videoUrl;
+             // If we have a video, the poster is secondary (thumbnail), but useful for social cards that need static img
+             if(posterUrl) window.CURRENT_POSTER = posterUrl;
+        } else if (posterUrl && posterUrl !== 'undefined') {
+             // Fallback: No video, but we have a poster/thumbnail
+             window.CURRENT_POSTER = posterUrl;
+             window.CURRENT_VIDEO_URL = null; // Explicitly nullify
+        }
 
-        if(prefill && videoUrl) {
-            // Show a "System" message indicating detection with THUMBNAIL if available
-            let visualHtml = `🎥 Média détecté : <strong>${title || 'Vidéo'}</strong>`;
-            if(posterUrl) {
-                visualHtml += `<br><img src="${posterUrl}" style="max-width:100px; border-radius:8px; margin-top:8px; display:block;" alt="Thumbnail">`;
+        if(title) window.CURRENT_TITLE = title;
+        
+        // Store Meta for AI Context
+        window.CURRENT_METADATA = {
+            keywords: keywords || "",
+            author: author || "",
+            description: description || ""
+        };
+
+        if(window.CURRENT_VIDEO_URL || window.CURRENT_POSTER || title) {
+            // Show a "System" message indicating detection
+            let visualHtml = `🎥 Média détecté : <strong>${title || 'Source Externe'}</strong>`;
+            
+            // Show thumbnail/poster in chat
+            const thumbToShow = window.CURRENT_POSTER || (window.CURRENT_VIDEO_URL && !window.CURRENT_VIDEO_URL.endsWith('.mp4') ? window.CURRENT_VIDEO_URL : null);
+            
+            if(thumbToShow) {
+                visualHtml += `<br><img src="${thumbToShow}" style="max-width:120px; border-radius:8px; margin-top:8px; display:block; border:1px solid #333;" alt="Aperçu">`;
             }
-            visualHtml += `<br><span style="font-size:0.9em; opacity:0.8">Je prépare une stratégie de diffusion...</span>`;
+            
+            if(window.CURRENT_VIDEO_URL) visualHtml += `<div style="font-size:0.8em; color:#4ade80; margin-top:4px">✓ Vidéo chargée</div>`;
+            else if(window.CURRENT_POSTER) visualHtml += `<div style="font-size:0.8em; color:#fbbf24; margin-top:4px">✓ Image/Thumbnail chargée (mode image)</div>`;
+
+            visualHtml += `<br><span style="font-size:0.9em; opacity:0.8">Analyse des métadonnées & génération...</span>`;
             
             addMessage('ai', visualHtml);
             
             // Auto-trigger generation with richer context
-            let prompt = `Je veux partager cette vidéo : "${title || 'Nouvelle vidéo'}".\nLien: ${videoUrl}\n`;
-            if(description) prompt += `Contexte/Description: "${description}"\n`;
-            prompt += `Génère des posts engageants pour mes réseaux en utilisant la technique du Newsjacking. Utilise l'image fournie comme visuel si nécessaire.`;
+            let prompt = `Je veux partager ce contenu : "${title || 'Nouveau contenu'}".\n`;
+            if(window.CURRENT_VIDEO_URL) prompt += `Type: Vidéo\nLien: ${window.CURRENT_VIDEO_URL}\n`;
+            else prompt += `Type: Image/Article\n`;
+
+            if(window.CURRENT_METADATA.description) prompt += `\nDescription/Contexte: "${window.CURRENT_METADATA.description}"\n`;
+            if(window.CURRENT_METADATA.keywords) prompt += `Mots-clés / Tags (à utiliser): ${window.CURRENT_METADATA.keywords}\n`;
+            if(window.CURRENT_METADATA.author) prompt += `Auteur: ${window.CURRENT_METADATA.author}\n`;
+            
+            prompt += `\nINSTRUCTION: Génère des posts engageants pour mes réseaux. Inclus les mots-clés fournis dans les hashtags si pertinent. Adapte le ton au contenu.`;
             
             handleSend(prompt);
         }
@@ -149,24 +640,74 @@
         }
     });
 
+
+    // --- UPDATED LOGIC FOR REALISTIC DECK ---
+
+    // 0. Inject Config
+    window.USER_CONFIG = <%- JSON.stringify(configured || {}) %>;
+
+    // 1. Initialize Deck State based on Config
+    document.addEventListener('DOMContentLoaded', () => {
+        const platforms = ['facebook', 'instagram', 'linkedin', 'twitter', 'tiktok', 'youtube'];
+        const authRoutes = {
+            tiktok: '/auth/tiktok/login',
+            linkedin: '/auth/linkedin/login'
+        };
+
+        platforms.forEach(p => {
+            const card = document.getElementById(`preview-${p}`);
+            if(!card) return;
+            
+            const isConnected = USER_CONFIG[p];
+            if (!isConnected) {
+                card.classList.add('disconnected');
+                
+                // Add Connect Button if route exists
+                const overlay = card.querySelector('.account-status-overlay');
+                if(overlay && authRoutes[p]) {
+                    overlay.innerHTML = `
+                        <div style="margin-bottom:8px">🔴 Compte non connecté</div>
+                        <a href="${authRoutes[p]}" target="_top" class="btn-share-real" style="
+                            background: white; 
+                            color: black; 
+                            text-decoration: none; 
+                            padding: 6px 12px; 
+                            font-size: 13px; 
+                            display: inline-block;
+                            border-radius: 20px;
+                        ">Se connecter</a>
+                    `;
+                }
+            } else {
+                card.classList.remove('disconnected');
+            }
+        });
+    });
+
     async function handleSend(forcedText = null){
         const input = document.getElementById('userPrompt');
         let txt = forcedText || input.value.trim();
         
         if(!txt) return;
 
-        // User Message
+        // Add user message to small chat log
+        const chatLog = document.getElementById('chatMessages');
         if (!forcedText) {
-            addMessage('user', txt);
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message user';
+            msgDiv.innerHTML = `<div class="bubble">${txt}</div>`;
+            chatLog.appendChild(msgDiv);
+            chatLog.scrollTop = chatLog.scrollHeight;
             input.value = '';
-            input.style.height = 'auto';
-        } else {
-             // For auto-trigger, we don't necessarily need to echo the huge prompt back
-             // just a small confirmation or nothing if the system msg covers it
         }
 
-        // AI Loading State
-        const loadingId = addMessage('ai', '<span class="typing-dots">Analyse de la tendance actuelle...</span>');
+        // Add AI loading
+        const loaderDiv = document.createElement('div');
+        loaderDiv.className = 'message ai';
+        loaderDiv.id = 'ai-loader';
+        loaderDiv.innerHTML = `<div class="bubble">Génération des variantes en cours... <i class="fas fa-spinner fa-spin"></i></div>`;
+        chatLog.appendChild(loaderDiv);
+        chatLog.scrollTop = chatLog.scrollHeight;
 
         try {
             const response = await fetch('/api/chat', {
@@ -174,8 +715,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     message: txt,
-                    platforms: Object.keys(USER_CONFIG),
-                    // Pass Metadata for Analysis
+                    platforms: Object.keys(USER_CONFIG).filter(k => USER_CONFIG[k]), // Only enabled platforms
                     media: {
                         type: window.CURRENT_VIDEO_URL ? 'video' : (window.CURRENT_POSTER ? 'image' : null),
                         url: window.CURRENT_VIDEO_URL || window.CURRENT_POSTER,
@@ -187,96 +727,56 @@
 
             if(!response.ok) throw new Error("Erreur réseau");
 
-            const data = await response.json(); // Expecting { reply, cards, mediaUsed }
+            const data = await response.json(); 
             
-            // 1. Update text reply
-            document.querySelector(`#${loadingId} .bubble`).innerHTML = data.reply || "Voici les résultats :";
+            // Remove Loader
+            loaderDiv.remove();
 
-            // 2. Determine Media to Display (Video vs Image based on Backend Decision)
-            const finalMedia = data.mediaUsed || { type: 'image', url: window.CURRENT_POSTER };
-            
-            // 3. Inject Cards if present
-            if (data.cards && Object.keys(data.cards).length > 0) {
-                const template = document.getElementById('platformCardsTemplate');
-                const clone = template.content.cloneNode(true);
-                
-                clone.querySelectorAll('.platform-wrapper').forEach(card => {
-                    const platform = card.dataset.platform;
-                    const content = data.cards[platform];
-                    const isConfigured = USER_CONFIG[platform];
+            // Add AI Reply Log
+            const replyDiv = document.createElement('div');
+            replyDiv.className = 'message ai';
+            replyDiv.innerHTML = `<div class="bubble">${data.reply || "Previews mises à jour !"}</div>`;
+            chatLog.appendChild(replyDiv);
 
-                    const previewEl = card.querySelector('.sp-text-preview');
-                    const copyBtn = card.querySelector('.action-copy');
+            // UPDATE RIGHT DECK
+            if (data.cards) {
+                Object.keys(data.cards).forEach(platform => {
+                    const card = document.getElementById(`preview-${platform}`);
+                    if (!card) return;
 
-                    if (!isConfigured) {
-                        // NOT AUTHENTICATED -> DARK CARD
-                        card.classList.add('locked'); // Add visual style for locked
-                        
-                        // EMPTY ALL VISUALS
-                        previewEl.innerText = "";
-                        previewEl.style.display = "none";
-                        
-                        // Hide potential media blocks
-                        const fullMedia = card.querySelector('.sp-full-media');
-                        if(fullMedia) fullMedia.style.display = "none";
-                        const mediaBlock = card.querySelector('.sp-media-block');
-                        if(mediaBlock) mediaBlock.style.display = "none";
-                        
-                        copyBtn.innerText = "Se connecter";
-                        copyBtn.classList.add('accent');
-                        copyBtn.onclick = () => window.open(`/auth/${platform}/login`, '_blank');
-                    } else if (content) {
-                        // AUTHENTICATED & HAS CONTENT
-                        previewEl.style.display = "block"; // Restore
-                        previewEl.innerText = content;
-                        
-                        // DISPLAY LOGIC: Video or Image + BRANDING
-                        if(finalMedia && finalMedia.url) {
-                            const isVideo = finalMedia.type === 'video';
-                            const mediaUrl = finalMedia.url;
-                            const posterUrl = finalMedia.poster || mediaUrl;
+                    // Update Text
+                    const textEl = card.querySelector('.post-text');
+                    if(textEl) textEl.innerText = data.cards[platform];
 
-                            // branding HTML overlay
-                            const brandingHtml = `<div class="sp-branding-mark" style="position:absolute;bottom:8px;right:8px;width:20px;height:20px;background:url('/assets/logo-video-spread-it.mp4');background-size:cover;border-radius:50%;border:1px solid rgba(255,255,255,0.5);"></div>`;
+                    // Update Media (if present)
+                    // Supports both .media-area and .media-container classes
+                    const mediaArea = card.querySelector('.media-area') || card.querySelector('.media-container');
+                    
+                    if (mediaArea) {
+                        mediaArea.innerHTML = ''; // Clear existing
+                        const mediaType = data.mediaUsed?.type || (window.CURRENT_VIDEO_URL ? 'video' : 'image');
+                        const mediaUrl = data.mediaUsed?.url || window.CURRENT_VIDEO_URL || window.CURRENT_POSTER;
 
-                            // Case 1: Full Background (Insta/TikTok)
-                            const fullMedia = card.querySelector('.sp-full-media');
-                            if(fullMedia) {
-                                fullMedia.style.display = "block"; // Restore
-                                fullMedia.style.backgroundImage = `url('${posterUrl}')`;
-                                // Add Branding
-                                if(!fullMedia.querySelector('.sp-branding-mark')) fullMedia.insertAdjacentHTML('beforeend', brandingHtml);
+                        if (mediaUrl) {
+                            if (mediaType === 'video') {
+                                // BETTER VIDEO TAG: Controls, PlaysInline, Loop, Poster
+                                // Adding muted autoplay for instant visual feedback on some browsers
+                                let posterAttr = window.CURRENT_POSTER ? `poster="${window.CURRENT_POSTER}"` : '';
+                                mediaArea.innerHTML = `<video src="${mediaUrl}" controls playsinline loop ${posterAttr} style="width:100%; height:100%; object-fit:cover; max-height:500px; display:block; background:#000;"></video>`;
+                            } else {
+                                mediaArea.innerHTML = `<img src="${mediaUrl}" style="width:100%; height:auto; display:block; object-fit:cover;">`;
                             }
-                            
-                            // Case 2: Feed Block (FB/Twitter/LI)
-                            const mediaBlock = card.querySelector('.sp-media-block');
-                            if(mediaBlock) {
-                                mediaBlock.style.display = "block"; // Restore
-                                mediaBlock.style.backgroundImage = `url('${posterUrl}')`;
-                                mediaBlock.style.display = 'block';
-                                // Add play icon if video
-                                if(isVideo) {
-                                    mediaBlock.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.2);"><span style="font-size:30px;">▶️</span></div>` + brandingHtml;
-                                } else {
-                                     mediaBlock.innerHTML = brandingHtml;
-                                }
-                            }
+                        } else if (platform === 'instagram' && !mediaUrl) {
+                             mediaArea.innerHTML = `<div style="padding:20px; text-align:center; color:#ef4444; font-size:12px; border:1px dashed #ef4444; margin:10px;">⚠️ Un média est requis pour Instagram</div>`;
                         }
-                    } else {
-                        previewEl.innerText = "Pas de contenu généré pour ce réseau.";
                     }
                 });
-                
-                const msgContainer = document.getElementById(loadingId);
-                msgContainer.appendChild(clone);
             }
             
-            // Scroll
-            const container = document.getElementById('chatMessages');
-            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-
         } catch (e) {
-            document.querySelector(`#${loadingId} .bubble`).innerHTML = "Désolé, une erreur est survenue : " + e.message;
+             console.error(e);
+             if(document.getElementById('ai-loader')) document.getElementById('ai-loader').remove();
+             addMessage('ai', `<span style="color:#ef4444">Erreur: ${e.message}</span>`);
         }
     }
 

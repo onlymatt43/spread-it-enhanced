@@ -211,6 +211,40 @@ body.composer-dark {
   }
   
   .platform-cards { grid-template-columns: 1fr; }
+  
+  /* FIX SPLIT VIEW ON MOBILE */
+  .composer-split-view {
+    flex-direction: column !important;
+    height: auto !important;
+  }
+  
+  .chat-sidebar {
+    width: 100% !important;
+    max-height: 40vh;
+    border-right: none;
+    border-bottom: 1px solid #333;
+    order: 2; /* Put chat below previews on mobile */
+  }
+  
+  .preview-deck {
+    width: 100% !important;
+    padding: 20px 16px !important;
+    gap: 20px !important;
+    order: 1;
+  }
+  
+  /* FIX CARD WIDTHS ON MOBILE */
+  .mockup-card {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  .mockup-card[data-platform="tiktok"],
+  .mockup-card[data-platform="youtube"] {
+    width: 100% !important;
+    max-width: 320px !important;
+    margin: 0 auto;
+  }
 }
 
 /* --- REUSED PREVIEW CSS (INTEGRATED) --- */

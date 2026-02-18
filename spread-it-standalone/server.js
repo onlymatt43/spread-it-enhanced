@@ -1,30 +1,8 @@
-const express = require('express');
-const session = require('express-session');
-const multer = require('multer');
-const path = require('path');
 const fs = require('fs');
-const OpenAI = require('openai');
-const axios = require('axios');
-const cron = require('node-cron');
-const moment = require('moment');
-const vision = require('@google-cloud/vision');
-const sharp = require('sharp');
-const { MongoClient } = require('mongodb');
-const { fetchTrendingTopics } = require('./services/trending');
-const turso = require('./db/turso');
-const { TwitterApi } = require('twitter-api-v2'); // Ajout pour Twitter
-const FormData = require('form-data'); // Ajout pour Facebook Upload
-
-// Nouveaux Services d'Intelligence
-const Strategist = require('./services/strategist');
-const VideoAI = require('./services/video-ai');
-const googleTrends = require('google-trends-api');
-
-// Configure layout if using ejs-layouts
-// const expressLayouts = require('express-ejs-layouts');
-// app.use(expressLayouts);
+const path = require('path');
 
 // Charge d'abord .env.local (perso), puis .env (template) si présent
+// LE FAIRE AVANT TOUT AUTRE REQUIRE qui pourrait utiliser process.env
 const defaultEnvPath = path.join(__dirname, '.env');
 const localEnvPath = path.join(__dirname, '.env.local');
 
@@ -36,7 +14,70 @@ if (fs.existsSync(localEnvPath)) {
   require('dotenv').config({ path: localEnvPath, override: true });
 }
 
+// FORCE LOAD TIKTOK SANDBOX CONFIG (To bypass Render Env Vars limitation for Verification)
+const tiktokConfigPath = path.join(__dirname, 'tiktok-config.json');
+if (fs.existsSync(tiktokConfigPath)) {
+    try {
+        const tiktokConfig = require(tiktokConfigPath);
+        if(tiktokConfig.TIKTOK_CLIENT_KEY) process.env.TIKTOK_CLIENT_KEY = tiktokConfig.TIKTOK_CLIENT_KEY;
+        if(tiktokConfig.TIKTOK_CLIENT_SECRET) process.env.TIKTOK_CLIENT_SECRET = tiktokConfig.TIKTOK_CLIENT_SECRET;
+        if(tiktokConfig.TIKTOK_REDIRECT_URI) process.env.TIKTOK_REDIRECT_URI = tiktokConfig.TIKTOK_REDIRECT_URI;
+        console.log("✅ TIKTOK SANDBOX CONFIG LOADED");
+    } catch(e) { console.error("Error loading tiktok config", e); }
+}
+
+const express = require('express');
+const cors = require('cors');
+const session = require('express-session');
+const multer = require('multer');
+const { randomUUID } = require('crypto');
+const OpenAI = require('openai');
+const axios = require('axios');
+const cron = require('node-cron');
+const moment = require('moment');
+const vision = require('@google-cloud/vision');
+const sharp = require('sharp');
+const { fetchTrendingTopics } = require('./services/trending');
+const turso = require('./db/turso');
+const { TwitterApi } = require('twitter-api-v2'); // Ajout pour Twitter
+const FormData = require('form-data'); // Ajout pour Facebook Upload
+const { spawn } = require('child_process');
+
+// Nouveaux Services d'Intelligence
+const Strategist = require('./services/strategist');
+const VideoAI = require('./services/video-ai');
+const VideoUploader = require('./services/video-uploader');
+const TikTokAuth = require('./services/tiktok-auth');
+const googleTrends = require('google-trends-api');
+
+// Configure layout if using ejs-layouts
+// const expressLayouts = require('express-ejs-layouts');
+// app.use(expressLayouts);
+
 const app = express();
+
+// CORS configuration - allow requests from chaud-devant and production
+const allowedOrigins = [
+  'http://localhost:8080',
+  'http://127.0.0.1:8080',
+  'https://chaud-devant.onlymatt.ca',
+  'https://onlymatt.ca'
+];
+
+app.use(cors({
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('⚠️ CORS blocked origin:', origin);
+      callback(null, true); // Allow anyway for development
+    }
+  },
+  credentials: true
+}));
 
 // Serve static files (including widget.js)
 app.use(express.static('public'));
@@ -62,6 +103,23 @@ function isSet(val) {
   return !PLACEHOLDER_PATTERNS.some((re) => re.test(v));
 }
 
+function resolveChatModel() {
+  const fallback = 'gpt-4o-mini';
+  const configured = (process.env.OPENAI_MODEL || '').trim();
+  const chosen = configured || fallback;
+  const unsupported = ['gpt-4', 'gpt-3.5-turbo', 'gpt-3.5-turbo-16k'];
+
+  if (unsupported.includes(chosen.toLowerCase())) {
+    if (!resolveChatModel._warned) {
+      console.warn(`[Chat API] Modèle ${chosen} incompatible avec response_format=json_object. Bascule vers gpt-4o.`);
+      resolveChatModel._warned = true;
+    }
+    return 'gpt-4o';
+  }
+
+  return chosen;
+}
+
 function validateEnv() {
   const issues = [];
 
@@ -75,12 +133,6 @@ function validateEnv() {
   const hasSA = isSet(process.env.GOOGLE_CLOUD_PRIVATE_KEY) && isSet(process.env.GOOGLE_CLOUD_CLIENT_EMAIL) && isSet(process.env.GOOGLE_CLOUD_PRIVATE_KEY_ID) && isSet(process.env.GOOGLE_CLOUD_PROJECT_ID);
   if (!hasVisionAPIKey && !hasSA) {
     issues.push('Missing Google Vision config (provide GOOGLE_CLOUD_VISION_KEY or Service Account fields: GOOGLE_CLOUD_PRIVATE_KEY, GOOGLE_CLOUD_CLIENT_EMAIL, GOOGLE_CLOUD_PRIVATE_KEY_ID, GOOGLE_CLOUD_PROJECT_ID).');
-  }
-
-  // MongoDB (optional)
-  const useMongo = (process.env.USE_MONGO || 'false') === 'true';
-  if (useMongo && !isSet(process.env.MONGODB_URI)) {
-    issues.push('USE_MONGO=true but MONGODB_URI is missing.');
   }
 
   // Facebook
@@ -140,7 +192,9 @@ function formatForPlatform(platform, caption, hashtags) {
     instagram: { maxLen: 2200, maxTags: 25, sepLine: true },
     twitter: { maxLen: 240, maxTags: 4, sepLine: false },
     tiktok: { maxLen: 150, maxTags: 5, sepLine: false },
-    linkedin: { maxLen: 700, maxTags: 5, sepLine: false }
+    linkedin: { maxLen: 700, maxTags: 5, sepLine: false },
+    youtube: { maxLen: 100, maxTags: 3, sepLine: false },
+    youtube_shorts: { maxLen: 100, maxTags: 3, sepLine: false }
   };
 
   const r = rules[platform] || rules.facebook;
@@ -178,29 +232,9 @@ if (!fs.existsSync(sessionBaseDir)) {
 let sessionStore;
 let sessionStoreName = 'memory';
 
-// Initialisation MongoDB & Strategist (optionnel via USE_MONGO)
-let db;
-let strategist;
-const USE_MONGO = (process.env.USE_MONGO || 'false') === 'true';
-
-if (USE_MONGO) {
-  const mongoClient = new MongoClient(process.env.MONGODB_URI || 'mongodb://localhost:27017');
-  async function connectDB() {
-    try {
-      await mongoClient.connect();
-      db = mongoClient.db(process.env.MONGODB_DB_NAME || 'spreadit_db');
-      strategist = new Strategist(db);
-      console.log("✅ MongoDB & Strategist Connected");
-    } catch (e) {
-      console.warn("⚠️ MongoDB Connection Failed. Strategist running in memory-only mode.");
-      strategist = new Strategist(null);
-    }
-  }
-  connectDB();
-} else {
-  strategist = new Strategist(null);
-  console.info("ℹ️ MongoDB disabled (USE_MONGO=false). Strategist running memory-only.");
-}
+// Initialisation Strategist (memory-only mode, Turso pour persistance)
+let strategist = new Strategist(null);
+console.info("ℹ️ Strategist running with Turso DB for persistence.");
 
 try {
   const SQLiteStore = require('connect-sqlite3')(session);
@@ -261,13 +295,6 @@ if (process.env.GOOGLE_CLOUD_VISION_KEY) {
     }
   });
 }
-
-// Configuration MongoDB pour lead generation (Utilise l'instance globale déjà initialisée)
-/* 
- * mongoClient est déjà initialisé plus haut.
- * On s'assure juste que la référence est disponible si nécessaire.
- */
-
 
 // Configuration multer pour l'upload de fichiers
 const storage = multer.diskStorage({
@@ -378,6 +405,16 @@ try {
   turso.init();
   turso.migrate();
   console.info('✅ Turso/SQLite DB initialized');
+
+  // Async init for Cloud DB (Fire and forget, but log)
+  if (turso.migrateCloud) {
+    turso.migrateCloud().then(() => {
+       console.info('✅ Turso/LibSQL Cloud DB checked/migrated');
+    }).catch(e => {
+       console.warn('⚠️ Turso/LibSQL Cloud DB init failed:', e.message);
+    });
+  }
+
 } catch (e) {
   console.warn('Turso DB not initialized:', e && e.message ? e.message : e);
 }
@@ -388,28 +425,55 @@ try {
 try {
   cron.schedule('*/15 * * * *', async () => {
     try {
-      console.log('⏱️ Refreshing trending topics (cron)');
+      // console.log('⏱️ Refreshing trending topics (cron)');
       await fetchTrendingTopics(true);
-      console.log('✅ Trending refreshed');
+      // console.log('✅ Trending refreshed');
     } catch (e) {
       console.warn('Trending refresh failed:', e && e.message ? e.message : e);
     }
   });
+
+  // NOUVEAU : Nettoyage automatique des uploads temporaires (fichiers > 1h)
+  cron.schedule('0 * * * *', () => {
+    const uploadDir = path.join(__dirname, 'public', 'uploads');
+    if (fs.existsSync(uploadDir)) {
+      fs.readdir(uploadDir, (err, files) => {
+        if (err) return;
+        const now = Date.now();
+        files.forEach(file => {
+          const filePath = path.join(uploadDir, file);
+          fs.stat(filePath, (err, stats) => {
+             // Supprime si vieux de plus d'une heure (3600000 ms)
+            if (!err && now - stats.mtimeMs > 3600000) { 
+              fs.unlink(filePath, () => {});
+            }
+          });
+        });
+      });
+    }
+  });
+
 } catch (e) {
   console.warn('Cron scheduling not available:', e && e.message ? e.message : e);
 }
 
 // --- NEW ENDPOINT: Handles the actual submission from the popup ---
 app.post('/api/smart-share-submit', express.json(), async (req, res) => {
+    // Définition de tempFilePath en dehors du try pour accès dans finally
+    let tempFilePath = null;
+
     try {
         const { mediaUrl, mediaType, caption, platforms, hashtags } = req.body;
         console.log("🚀 Receiving Smart Share Submission:", { mediaUrl, platforms });
 
+        tempFilePath = path.join(__dirname, 'temp_' + Date.now() + (mediaType === 'video' ? '.mp4' : '.jpg'));
+
+        let results = [];
+        let errors = [];
+
         // 1. Download the media temporarily so we can upload it
         // (Note: Many APIs require a local file stream or binary buffer, 
         // passing a raw URL often fails if the platform needs to re-host it)
-        const tempFilePath = path.join(__dirname, 'temp_' + Date.now() + (mediaType === 'video' ? '.mp4' : '.jpg'));
-        
         console.log("⬇️  Downloading media...");
         const response = await axios({
             method: 'GET',
@@ -658,6 +722,7 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
                  return { success: true, platform, id: publishRes.data.id };
              }
 
+
              // --- LINKEDIN ---
              if (platform === 'linkedin') {
                  // Requires LinkedIn API setup which is complex (URNs, Assets).
@@ -667,6 +732,56 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
                 
                 // (Implementation omitted for brevity, would require 'author' URN and media upload flow)
                 return { success: true, platform, id: 'mock_linkedin_' + Date.now(), warning: "LinkedIn implementation pending" };
+             }
+
+             // --- YOUTUBE SHORTS (Natif) ---
+             if (platform === 'youtube' || platform === 'youtube_shorts') {
+                 if (mediaType !== 'video') {
+                     return { success: false, platform, error: "YouTube requires video media type" };
+                 }
+                 if (!process.env.YOUTUBE_REFRESH_TOKEN) {
+                     return { success: false, platform, error: "Missing YOUTUBE_REFRESH_TOKEN" };
+                 }
+
+                 try {
+                     // Convert string hashtags "#foo #bar" to array ["foo", "bar"]
+                     const tagsArray = platformHashtags
+                        ? platformHashtags.split(' ').map(t => t.replace('#', '')).filter(Boolean)
+                        : [];
+                     
+                     // Use caption as title (YouTube Shorts uses title heavily)
+                     // If title is too long, we might need to truncate
+                     const result = await VideoUploader.uploadYouTubeShorts(
+                         tempFilePath, 
+                         platformCaption, 
+                         platformCaption, // Description same as title/caption for Shorts
+                         tagsArray
+                     );
+                     return { success: true, platform: 'youtube', id: result.id, url: result.url };
+
+                 } catch (e) {
+                     return { success: false, platform, error: e.message };
+                 }
+             }
+
+             // --- TIKTOK (Natif) ---
+             if (platform === 'tiktok') {
+                 if (mediaType !== 'video') {
+                     return { success: false, platform, error: "TikTok requires video media type" };
+                 }
+                 if (!process.env.TIKTOK_ACCESS_TOKEN) {
+                     return { success: false, platform, error: "Missing TIKTOK_ACCESS_TOKEN" };
+                 }
+
+                 try {
+                     // TikTok caption includes hashtags
+                     const finalCaption = platformCaption + ' ' + platformHashtags;
+                     const result = await VideoUploader.uploadTikTok(tempFilePath, finalCaption);
+                     
+                     return { success: true, platform: 'tiktok', id: result.id, status: result.status };
+                 } catch (e) {
+                     return { success: false, platform, error: e.message };
+                 }
              }
              
              return { success: false, platform, error: "Platform not supported yet" };
@@ -690,8 +805,7 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
             }
         }
 
-        // 3. Cleanup temp file
-        fs.unlinkSync(tempFilePath);
+        // 3. Cleanup temp file -> DÉPLACÉ DANS FINALLY
 
         // 4. Record successful posts for learning
         for (const result of results) {
@@ -705,6 +819,43 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
                     media_type: mediaType,
                     hashtags_used: hashtags
                 });
+
+                // B. SAUVEGARDE PERMANENTE (Secours SQLite/Turso)
+                // C'est ici qu'on garantit que ça "enregistre" vraiment dans le disque dur local
+                try {
+                    const backupId = `auto_${Date.now()}_${result.platform}`;
+                    const metaData = {
+                        mediaUrl,
+                        mediaType,
+                        hashtags
+                    };
+                    
+                    const shareParams = [
+                        backupId,           // id
+                        'smart_share',      // experiment_id
+                        'system_user',      // user_id
+                        result.platform,    // platform
+                        caption,            // original_content
+                        caption,            // ai_content (final)
+                        result.id,          // post_id
+                        Date.now(),         // published_at
+                        JSON.stringify(metaData) // meta
+                    ];
+
+                    const shareSql = `INSERT INTO shares (id, experiment_id, user_id, platform, original_content, ai_content, post_id, published_at, meta)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+                    turso.run(shareSql, shareParams);
+
+                    if (turso.runCloud) {
+                        turso.runCloud(shareSql, shareParams)
+                            .then(() => console.log(`☁️  Synced to Turso Cloud for ${result.platform}`))
+                            .catch(e => console.error("☁️❌ Cloud Sync Failed:", e.message));
+                    }
+                    console.log(`💾 Post saved to permanent history (SQLite) for ${result.platform}`);
+                } catch (dbErr) {
+                    console.error("⚠️ Backup save to SQLite failed:", dbErr.message);
+                }
             }
         }
 
@@ -718,6 +869,16 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
     } catch (error) {
         console.error("🔥 Global Error in Smart Share:", error);
         res.status(500).json({ success: false, error: error.message });
+    } finally {
+        // NETTOYAGE SÉCURISÉ : Garantit la suppression même en cas de crash
+        if (tempFilePath && fs.existsSync(tempFilePath)) {
+            try {
+                fs.unlinkSync(tempFilePath);
+                console.log("🧹 Temp file cleaned up");
+            } catch (e) {
+                console.error("Warning: Failed to cleanup temp file", e.message);
+            }
+        }
     }
 });
 
@@ -727,16 +888,28 @@ app.post('/api/create-post-ai', express.json(), async (req, res) => {
         
         console.log(`🧠 AI Strategy working for ${options.platform}...`);
 
-        // 1. Si c'est une vidéo, analyser d'abord le contenu visuel profond
+        // 1. Si c'est une vidéo, analyser d'abord le contenu visuel profond AVEC TIMEOUT
         let videoContext = {};
         if (mediaType === 'video' && mediaUrl) {
-           videoContext = await VideoAI.analyzeVideo(mediaUrl);
-           console.log("Video Context:", videoContext.summary);
+           try {
+               // Protection contre timeout infini (5s max)
+               videoContext = await Promise.race([
+                   VideoAI.analyzeVideo(mediaUrl),
+                   new Promise((_, reject) => setTimeout(() => reject(new Error('VideoAI Timeout')), 5000))
+               ]);
+               console.log("Video Context:", videoContext.summary);
+           } catch (vErr) {
+               console.warn("⚠️ Video Analysis skipped (timeout or error):", vErr.message);
+               // On continue sans le contexte vidéo pour ne pas bloquer l'utilisateur
+               videoContext = { summary: [] };
+           }
         }
 
         // 2. Le Strategist combine tout (Rules + Trends + History + Content)
         // Il enrichit le prompt de base avec les données vidéos
-        const enrichedContent = videoContext.summary 
+        // FIX: Vérifie si summary existe ET n'est pas vide pour éviter "Video contains: ."
+        const hasVideoSummary = videoContext.summary && videoContext.summary.length > 0;
+        const enrichedContent = hasVideoSummary
             ? `Video contains: ${videoContext.summary.join(', ')}. Caption: ${content}`
             : content;
 
@@ -856,10 +1029,103 @@ app.get('/api/learning-dashboard', async (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  res.render('index', {
-    title: 'Spread It - Créateur de Contenu IA',
-    user: req.session.user
-  });
+  // Redirect to spreads grid (new default interface)
+  res.redirect('/spreads');
+});
+
+// --- ROUTES LÉGALES (POUR FACEBOOK APP REVIEW) ---
+app.get('/privacy', (req, res) => res.render('privacy'));
+app.get('/terms', (req, res) => res.render('terms'));
+app.get('/reaction', (req, res) => res.render('reaction')); // New Reaction Mode
+app.get('/data-deletion', (req, res) => res.render('data_deletion'));
+// Je remets la route /verify comme demandé
+app.get('/verify', (req, res) => {
+    res.set('Content-Type', 'text/plain');
+    res.send('tiktok-developers-site-verification=NyPBtRH4x5RVlQYdGh4qZJcwC80UGjUL');
+});
+
+// --- TIKTOK DYNAMIC VERIFICATION ---
+// Répond automatiquement à n'importe quel fichier tiktokXXXXX.txt
+// Plus besoin de redéployer quand le code change !
+app.get(/^\/tiktok[a-zA-Z0-9]+\.txt$/, (req, res) => {
+    // ex: /tiktok9xKCnP2dfS1Zy9SqVjyp7NJGX3PnxXtZ.txt
+    const filename = req.path.substring(1); // retire le / initial
+    const hash = filename.replace('tiktok', '').replace('.txt', '');
+    
+    console.log(`Auto-verifying TikTok request for hash: ${hash}`);
+    res.set('Content-Type', 'text/plain');
+    res.send(`tiktok-developers-site-verification=${hash}`);
+});
+
+// --- AUTHENTIFICATION TIKTOK ---
+// 1. Démarrer le Login
+app.get('/auth/tiktok/login', (req, res) => {
+    try {
+        const state = randomUUID();
+        // Sauvegarder l'état en session pour sécurité CSRF
+        if (req.session) req.session.tiktokState = state;
+        
+        // Génération PKCE (Proof Key for Code Exchange)
+        // Obligatoire pour TikTok V2 API
+        const { verifier, challenge } = TikTokAuth.generatePKCE();
+        
+        if (req.session) {
+            req.session.tiktokCodeVerifier = verifier;
+        }
+
+        const url = TikTokAuth.generateAuthUrl(state, challenge);
+        res.redirect(url);
+    } catch (e) {
+        res.status(500).send("Erreur de configuration TikTok : " + e.message);
+    }
+});
+
+// 2. Callback (Retour de TikTok)
+app.get('/auth/tiktok/callback', async (req, res) => {
+    const { code, state, error, error_description } = req.query;
+
+    if (error) {
+        // Gestion propre de l'erreur / Refus de l'utilisateur
+        return res.status(400).send(`
+            <!DOCTYPE html>
+            <html lang="fr">
+            <body style="font-family:sans-serif; background:#000; color:#fff; text-align:center; padding-top:50px;">
+                <h1 style="color:#FE2C55">Connexion annulée</h1>
+                <p>La connexion à TikTok a été refusée ou a échoué.</p>
+                <p style="color:#888">Message : ${error_description}</p>
+                <a href="/composer" style="display:inline-block; margin-top:20px; text-decoration:none; background:#333; color:white; padding:10px 20px; border-radius:5px;">Retourner au Dashboard</a>
+            </body>
+            </html>
+        `);
+    }
+
+    // Vérifier CSRF si possible
+    // if (req.session && req.session.tiktokState !== state) { ... }
+
+    try {
+        // Récupérer le code_verifier de la session pour l'échange de token
+        const codeVerifier = req.session ? req.session.tiktokCodeVerifier : null;
+
+        const data = await TikTokAuth.getAccessToken(code, codeVerifier);
+        
+        // Stocker le token dans la session (ou DB en prod)
+        if (req.session) {
+            req.session.tiktokToken = data; 
+            // Nettoyer le verifier après usage
+            delete req.session.tiktokCodeVerifier;
+        }
+
+        // AFFICHER LE TOKEN VIA LE TEMPLATE JOLI
+        res.render('tiktok-success', { tokenData: data });
+
+    } catch (e) {
+        console.error("TikTok Auth Error:", e);
+        res.status(500).send(`
+            <h1 style="color:red">Erreur TikTok</h1>
+            <p>${e.message}</p>
+            <a href="/composer">Retour</a>
+        `);
+    }
 });
 
 app.get('/create', (req, res) => {
@@ -873,7 +1139,8 @@ app.get('/composer', (req, res) => {
       facebook: !!(process.env.FACEBOOK_ACCESS_TOKEN || (req.session.tokens && req.session.tokens.facebook)),
       twitter: !!(process.env.TWITTER_ACCESS_TOKEN),
       instagram: !!(process.env.INSTAGRAM_ACCESS_TOKEN),
-      tiktok: false 
+      tiktok: !!(process.env.TIKTOK_ACCESS_TOKEN || (req.session.tiktokToken)),
+      youtube: !!(process.env.YOUTUBE_REFRESH_TOKEN)
   };
 
   res.render('composer', {
@@ -882,6 +1149,635 @@ app.get('/composer', (req, res) => {
     configured
   });
 });
+
+// NEW: Spread Grid View - stacked mockups interface
+app.get('/spreads', (req, res) => {
+  try {
+    // Load spreads from Turso DB
+    const spreads = turso.all('SELECT * FROM spreads ORDER BY created_at DESC', []);
+    
+    // Parse JSON fields
+    const spreadsData = spreads.map(row => ({
+      id: row.id,
+      media_url: row.media_url,
+      media_type: row.media_type,
+      ai_suggestion: row.ai_suggestion,
+      user_text: row.user_text,
+      platforms: JSON.parse(row.platforms || '[]'),
+      content: JSON.parse(row.content || '{}'),
+      created_at: row.created_at,
+      status: row.status || 'draft'
+    }));
+
+    res.render('spread-grid', {
+      title: 'Mes Spreads - Spread It',
+      user: req.session.user,
+      spreads: spreadsData
+    });
+  } catch (error) {
+    console.error('[Spreads Grid Error]:', error);
+    res.render('spread-grid', {
+      title: 'Mes Spreads - Spread It',
+      user: req.session.user,
+      spreads: []
+    });
+  }
+});
+
+// NEW: Create Spread Modal - triggered from media
+app.get('/create-spread', (req, res) => {
+  res.render('create-spread-modal', {
+    title: 'Create Spread - Spread It',
+    user: req.session.user
+  });
+});
+
+// NEW: Extract metadata from media (AI analysis)
+app.post('/api/extract-metadata', express.json(), async (req, res) => {
+  try {
+    const { mediaUrl, mediaType, title } = req.body;
+    
+    if (!mediaUrl) {
+      return res.status(400).json({ error: 'Media URL required' });
+    }
+
+    console.log(`[Extract Metadata] Analyzing ${mediaType}: ${mediaUrl}`);
+
+    // Generate AI suggestion based on media info
+    const strategist = new Strategist(null);
+    
+    // Simple prompt for metadata extraction
+    const metadataPrompt = `
+      Analyse ce média et génère une suggestion de post engageante en franglais québécois:
+      
+      Type: ${mediaType}
+      URL: ${mediaUrl}
+      Titre: ${title || 'Sans titre'}
+      
+      Donne une seule phrase punchy et engageante (max 100 caractères) qui décrit ce contenu.
+      Style: Edgy, sexy, confiant. Franglais ("C'est fucking insane").
+    `;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'Tu es un expert en création de contenu viral. Réponds en une seule phrase punchy.' },
+        { role: 'user', content: metadataPrompt }
+      ],
+      temperature: 0.9,
+      max_tokens: 100
+    });
+
+    const suggestion = completion.choices[0].message.content.trim();
+
+    res.json({ 
+      suggestion,
+      mediaUrl,
+      mediaType
+    });
+
+  } catch (error) {
+    console.error('[Extract Metadata Error]:', error);
+    res.status(500).json({ error: 'Failed to extract metadata' });
+  }
+});
+
+// NEW: Create Spread - generate posts for selected platforms only
+app.post('/api/create-spread', express.json(), async (req, res) => {
+  try {
+    const { mediaUrl, mediaType, aiSuggestion, userText, platforms } = req.body;
+
+    if (!mediaUrl || !platforms || platforms.length === 0) {
+      return res.status(400).json({ error: 'Media URL and platforms required' });
+    }
+
+    console.log(`[Create Spread] Generating for platforms: ${platforms.join(', ')}`);
+
+    // Combine AI suggestion + user text
+    const fullPrompt = [
+      aiSuggestion,
+      userText ? `\n\nUser addition: ${userText}` : ''
+    ].filter(Boolean).join('');
+
+    // Use strategist to generate platform-specific content
+    const strategist = new Strategist(null);
+    
+    // Get newsjacking context
+    const { currentTrend, influencer } = await getNewsjackingContext(fullPrompt);
+    
+    const systemPrompt = strategist.generateChatPrompt(
+      `MEDIA: ${mediaType} fourni.`,
+      currentTrend,
+      influencer,
+      { type: mediaType, url: mediaUrl }
+    );
+
+    // Generate content for ONLY selected platforms
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `
+        Génère des posts SEULEMENT pour ces plateformes: ${platforms.join(', ')}
+        
+        Contenu de base: ${fullPrompt}
+        
+        Instructions:
+        - AI suggestion: "${aiSuggestion}" (inspire-toi de ça)
+        - User text: "${userText || 'Aucun'}" (si présent, corrige les fautes mais ne transforme PAS)
+        - Combine les deux intelligemment
+        - Adapte pour chaque plateforme sélectionnée
+        
+        Retourne JSON avec SEULEMENT les plateformes demandées.
+      `}
+    ];
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: messages,
+      temperature: 0.8,
+      response_format: { type: "json_object" }
+    });
+
+    let result = JSON.parse(completion.choices[0].message.content);
+
+    // Save to Turso database
+    const spreadId = `spread_${Date.now()}`;
+    const spreadSql = `
+      INSERT INTO spreads (id, media_url, media_type, ai_suggestion, user_text, platforms, content, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    const spreadParams = [
+      spreadId,
+      mediaUrl,
+      mediaType,
+      aiSuggestion,
+      userText || '',
+      JSON.stringify(platforms),
+      JSON.stringify(result.cards || {}),
+      new Date().toISOString()
+    ];
+
+    turso.run(spreadSql, spreadParams);
+    if (turso.runCloud) {
+      turso.runCloud(spreadSql, spreadParams).catch(console.error);
+    }
+
+    res.json({
+      success: true,
+      spreadId,
+      cards: result.cards,
+      platforms
+    });
+
+  } catch (error) {
+    console.error('[Create Spread Error]:', error);
+    res.status(500).json({ error: 'Failed to create spread' });
+  }
+});
+
+// NEW: Check Platform Connection Status
+app.get('/api/platforms/status', async (req, res) => {
+  try {
+    const status = {};
+
+    // FACEBOOK
+    try {
+      if (process.env.FACEBOOK_ACCESS_TOKEN && process.env.FACEBOOK_PAGE_ID) {
+        const fbResponse = await axios.get(
+          `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}`,
+          {
+            params: { access_token: process.env.FACEBOOK_ACCESS_TOKEN, fields: 'id,name' },
+            timeout: 5000
+          }
+        );
+        status.facebook = { 
+          connected: true, 
+          name: fbResponse.data.name,
+          pageId: fbResponse.data.id 
+        };
+      } else {
+        status.facebook = { connected: false, reason: 'Missing credentials' };
+      }
+    } catch (error) {
+      status.facebook = { 
+        connected: false, 
+        reason: error.response?.data?.error?.message || 'Token invalid or expired' 
+      };
+    }
+
+    // INSTAGRAM
+    try {
+      if (process.env.INSTAGRAM_ACCESS_TOKEN && process.env.INSTAGRAM_BUSINESS_ID) {
+        const igResponse = await axios.get(
+          `https://graph.instagram.com/${process.env.INSTAGRAM_BUSINESS_ID}`,
+          {
+            params: { access_token: process.env.INSTAGRAM_ACCESS_TOKEN, fields: 'id,username' },
+            timeout: 5000
+          }
+        );
+        status.instagram = { 
+          connected: true, 
+          username: igResponse.data.username,
+          accountId: igResponse.data.id 
+        };
+      } else {
+        status.instagram = { connected: false, reason: 'Missing credentials' };
+      }
+    } catch (error) {
+      status.instagram = { 
+        connected: false, 
+        reason: error.response?.data?.error?.message || 'Token invalid or expired' 
+      };
+    }
+
+    // TWITTER
+    try {
+      if (process.env.TWITTER_ACCESS_TOKEN && process.env.TWITTER_ACCESS_TOKEN_SECRET) {
+        const { TwitterApi } = require('twitter-api-v2');
+        const client = new TwitterApi({
+          appKey: process.env.TWITTER_API_KEY,
+          appSecret: process.env.TWITTER_API_SECRET,
+          accessToken: process.env.TWITTER_ACCESS_TOKEN,
+          accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET
+        });
+        const me = await client.v2.me();
+        status.twitter = { 
+          connected: true, 
+          username: me.data.username,
+          userId: me.data.id 
+        };
+      } else {
+        status.twitter = { connected: false, reason: 'Missing credentials' };
+      }
+    } catch (error) {
+      status.twitter = { 
+        connected: false, 
+        reason: error.message || 'Token invalid or expired' 
+      };
+    }
+
+    // LINKEDIN
+    try {
+      if (process.env.LINKEDIN_ACCESS_TOKEN && process.env.LINKEDIN_ACCESS_TOKEN !== 'dummy') {
+        const liResponse = await axios.get('https://api.linkedin.com/v2/me', {
+          headers: { 'Authorization': `Bearer ${process.env.LINKEDIN_ACCESS_TOKEN}` },
+          timeout: 5000
+        });
+        status.linkedin = { 
+          connected: true, 
+          name: `${liResponse.data.localizedFirstName} ${liResponse.data.localizedLastName}`,
+          personId: liResponse.data.id 
+        };
+      } else {
+        status.linkedin = { connected: false, reason: 'Missing credentials' };
+      }
+    } catch (error) {
+      status.linkedin = { 
+        connected: false, 
+        reason: error.response?.data?.message || 'Token invalid or expired' 
+      };
+    }
+
+    // TIKTOK
+    if (process.env.TIKTOK_ACCESS_TOKEN) {
+      try {
+        // TikTok user info endpoint
+        const ttResponse = await axios.get('https://open.tiktokapis.com/v2/user/info/', {
+          headers: { 'Authorization': `Bearer ${process.env.TIKTOK_ACCESS_TOKEN}` },
+          timeout: 5000
+        });
+        status.tiktok = { 
+          connected: true, 
+          username: ttResponse.data.data.user.display_name 
+        };
+      } catch (error) {
+        status.tiktok = { 
+          connected: false, 
+          reason: error.response?.data?.error?.message || 'Token invalid or expired' 
+        };
+      }
+    } else {
+      status.tiktok = { connected: false, reason: 'Missing access token' };
+    }
+
+    // YOUTUBE
+    try {
+      if (process.env.YOUTUBE_REFRESH_TOKEN && process.env.YOUTUBE_CLIENT_ID) {
+        const { google } = require('googleapis');
+        const oauth2Client = new google.auth.OAuth2(
+          process.env.YOUTUBE_CLIENT_ID,
+          process.env.YOUTUBE_CLIENT_SECRET,
+          'http://localhost:3000/auth/youtube/callback'
+        );
+        oauth2Client.setCredentials({
+          refresh_token: process.env.YOUTUBE_REFRESH_TOKEN
+        });
+
+        const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+        const channelResponse = await youtube.channels.list({
+          part: 'snippet',
+          mine: true
+        });
+
+        if (channelResponse.data.items && channelResponse.data.items.length > 0) {
+          status.youtube = { 
+            connected: true, 
+            channelName: channelResponse.data.items[0].snippet.title,
+            channelId: channelResponse.data.items[0].id
+          };
+        } else {
+          status.youtube = { connected: false, reason: 'No channel found' };
+        }
+      } else {
+        status.youtube = { connected: false, reason: 'Missing credentials' };
+      }
+    } catch (error) {
+      status.youtube = { 
+        connected: false, 
+        reason: error.message || 'Token invalid or expired' 
+      };
+    }
+
+    res.json(status);
+
+  } catch (error) {
+    console.error('[Platform Status Error]:', error);
+    res.status(500).json({ error: 'Failed to check platform status' });
+  }
+});
+
+// NEW: Edit Spread via Chat AI (platform-specific)
+app.post('/api/edit-spread-chat', express.json(), async (req, res) => {
+  try {
+    const { spreadId, platform, userMessage } = req.body;
+
+    if (!spreadId || !platform || !userMessage) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    console.log(`[Edit Spread Chat] ${spreadId} - ${platform}: "${userMessage}"`);
+
+    // Load spread from DB
+    const spread = turso.get('SELECT * FROM spreads WHERE id = ?', [spreadId]);
+    if (!spread) {
+      return res.status(404).json({ error: 'Spread not found' });
+    }
+
+    const content = JSON.parse(spread.content || '{}');
+    const currentText = content[platform];
+
+    if (!currentText) {
+      return res.status(404).json({ error: 'Platform content not found' });
+    }
+
+    // Platform-specific AI personalities
+    const platformPersonalities = {
+      facebook: "Tu es l'AI Facebook: storytelling engageant, début intrigant, texte moyen/long, questions pour engagement.",
+      instagram: "Tu es l'AI Instagram: visuel-first, légende courte + punchy, hashtags en bloc à la fin.",
+      twitter: "Tu es l'AI Twitter: shitposting ou value bomb, < 280 caractères, pas de hashtags de boomer.",
+      linkedin: "Tu es l'AI LinkedIn: expert mais pas chiant, 'broetry', structure Accroche→Leçon→Question.",
+      tiktok: "Tu es l'AI TikTok: caption minuscule (100-150 chars), mots-clés SEO, ton GEN Z/CHAOS.",
+      youtube: "Tu es l'AI YouTube: titre punchy + tags pour Shorts, accrocheur dès le début."
+    };
+
+    const systemPrompt = `${platformPersonalities[platform] || 'Tu es un AI de création de contenu.'}
+
+L'utilisateur a ce post actuel:
+"${currentText}"
+
+Il te demande: "${userMessage}"
+
+IMPORTANT:
+- Si c'est une modification (ex: "rends ça plus court", "ajoute emojis"), retourne le texte MODIFIÉ.
+- Si c'est une question (ex: "c'est bon?"), réponds normalement.
+- Respecte TOUJOURS le style de ta plateforme (${platform}).
+- Franglais québécois, edgy, sexy.
+
+Réponds en JSON:
+{
+  "aiResponse": "Ta réponse conversationnelle à l'utilisateur",
+  "updatedText": "Le texte modifié (ou null si pas de modification)"
+}`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage }
+      ],
+      temperature: 0.8,
+      response_format: { type: "json_object" }
+    });
+
+    const result = JSON.parse(completion.choices[0].message.content);
+
+    // Update DB if text was modified
+    if (result.updatedText) {
+      content[platform] = result.updatedText;
+      turso.run(
+        'UPDATE spreads SET content = ? WHERE id = ?',
+        [JSON.stringify(content), spreadId]
+      );
+      if (turso.runCloud) {
+        turso.runCloud(
+          'UPDATE spreads SET content = ? WHERE id = ?',
+          [JSON.stringify(content), spreadId]
+        ).catch(console.error);
+      }
+    }
+
+    res.json({
+      aiResponse: result.aiResponse,
+      updatedText: result.updatedText || null
+    });
+
+  } catch (error) {
+    console.error('[Edit Spread Chat Error]:', error);
+    res.status(500).json({ error: 'Failed to process chat message' });
+  }
+});
+
+// Helper: Get LinkedIn Person URN
+app.get('/api/linkedin/get-person-urn', async (req, res) => {
+  try {
+    const accessToken = process.env.LINKEDIN_ACCESS_TOKEN;
+    
+    if (!accessToken || accessToken === 'dummy') {
+      return res.status(400).json({ 
+        error: 'LinkedIn access token not configured',
+        hint: 'Set LINKEDIN_ACCESS_TOKEN in .env.local'
+      });
+    }
+
+    const response = await axios.get('https://api.linkedin.com/v2/me', {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+
+    const personId = response.data.id;
+    const personUrn = `urn:li:person:${personId}`;
+
+    res.json({
+      success: true,
+      personUrn,
+      personId,
+      message: `Add this to .env.local:\nLINKEDIN_PERSON_URN=${personUrn}`
+    });
+
+  } catch (error) {
+    console.error('[LinkedIn Person URN Error]:', error.response?.data || error.message);
+    res.status(500).json({ 
+      error: 'Failed to get LinkedIn Person URN',
+      details: error.response?.data?.message || error.message,
+      hint: 'Token may be expired. LinkedIn tokens expire after 60 days.'
+    });
+  }
+});
+
+// NEW: Publish Spread to Social Media
+app.post('/api/publish-spread', express.json(), async (req, res) => {
+  try {
+    const { spreadId, platform } = req.body;
+
+    if (!spreadId || !platform) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    console.log(`[Publish Spread] ${spreadId} → ${platform}`);
+
+    // Load spread from DB
+    const spread = turso.get('SELECT * FROM spreads WHERE id = ?', [spreadId]);
+    if (!spread) {
+      return res.status(404).json({ error: 'Spread not found' });
+    }
+
+    const content = JSON.parse(spread.content || '{}');
+    const platformText = content[platform];
+    const mediaUrl = spread.media_url;
+
+    if (!platformText) {
+      return res.status(404).json({ error: 'Platform content not found' });
+    }
+
+    // Get LinkedIn Person URN dynamically if needed
+    let linkedinPersonUrn = process.env.LINKEDIN_PERSON_URN;
+    if (platform === 'linkedin' && !linkedinPersonUrn) {
+      try {
+        const meResponse = await axios.get('https://api.linkedin.com/v2/me', {
+          headers: { 'Authorization': `Bearer ${process.env.LINKEDIN_ACCESS_TOKEN}` }
+        });
+        linkedinPersonUrn = `urn:li:person:${meResponse.data.id}`;
+      } catch (e) {
+        console.warn('Could not fetch LinkedIn Person URN:', e.message);
+      }
+    }
+
+    // Prepare credentials per platform
+    const credentials = {
+      facebook: {
+        pageAccessToken: process.env.FACEBOOK_ACCESS_TOKEN,
+        pageId: process.env.FACEBOOK_PAGE_ID
+      },
+      instagram: {
+        accessToken: process.env.INSTAGRAM_ACCESS_TOKEN,
+        igUserId: process.env.INSTAGRAM_BUSINESS_ID
+      },
+      twitter: {
+        apiKey: process.env.TWITTER_API_KEY,
+        apiSecret: process.env.TWITTER_API_SECRET,
+        accessToken: process.env.TWITTER_ACCESS_TOKEN,
+        accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET
+      },
+      linkedin: {
+        accessToken: process.env.LINKEDIN_ACCESS_TOKEN,
+        personUrn: linkedinPersonUrn
+      },
+      tiktok: {
+        accessToken: process.env.TIKTOK_ACCESS_TOKEN
+      },
+      youtube: {
+        oauth2Client: null // TODO: Initialize with refresh token
+      }
+    };
+
+    if (!credentials[platform]) {
+      return res.status(400).json({ error: 'Platform not supported' });
+    }
+
+    // Import publisher service
+    const { publishSpread } = require('./services/social-publisher');
+
+    // Publish (async process)
+    const result = await publishSpread({
+      platform,
+      mediaUrl,
+      content: {
+        text: platformText,
+        title: spread.title || platformText.substring(0, 100),
+        hashtags: platformText.match(/#\w+/g) || []
+      },
+      workDir: path.join(__dirname, 'temp')
+    }, credentials[platform]);
+
+    // Update spread status in DB
+    const metadata = JSON.parse(spread.metadata || '{}');
+    metadata.published = metadata.published || {};
+    metadata.published[platform] = {
+      status: 'published',
+      timestamp: new Date().toISOString(),
+      url: result.url || null,
+      externalId: result.videoId || result.tweetId || result.mediaId || null
+    };
+
+    turso.run(
+      'UPDATE spreads SET metadata = ? WHERE id = ?',
+      [JSON.stringify(metadata), spreadId]
+    );
+
+    if (turso.runCloud) {
+      turso.runCloud(
+        'UPDATE spreads SET metadata = ? WHERE id = ?',
+        [JSON.stringify(metadata), spreadId]
+      ).catch(console.error);
+    }
+
+    res.json({
+      success: true,
+      platform,
+      url: result.url,
+      message: `Publié sur ${platform} avec succès!`
+    });
+
+  } catch (error) {
+    console.error('[Publish Spread Error]:', error);
+    res.status(500).json({ 
+      error: 'Failed to publish',
+      details: error.message 
+    });
+  }
+});
+
+// Helper function for newsjacking context (used by multiple endpoints)
+async function getNewsjackingContext(message) {
+  let currentTrend = "Aucune tendance détectée";
+  let influencer = { name: "Toi-même", handle: "@you", style: "Unique" };
+  
+  try {
+    // Try to fetch trending topic
+    const trends = await fetchTrendingTopics();
+    if (trends && trends.length > 0) {
+      currentTrend = trends[0].title || trends[0];
+    }
+  } catch (e) {
+    console.warn('Trending topics unavailable');
+  }
+
+  // Select goal account based on content
+  const strategist = new Strategist(null);
+  influencer = strategist.selectGoalAccount(message || '');
+
+  return { currentTrend, influencer };
+}
 
 // Simple chat endpoint (non-streaming)
 app.post('/api/ai-chat', express.json(), async (req, res) => {
@@ -909,6 +1805,30 @@ app.post('/api/ai-chat', express.json(), async (req, res) => {
   } catch (e) {
     console.error('AI chat error:', e && e.message ? e.message : e);
     res.status(500).json({ error: 'AI chat error' });
+  }
+});
+
+// --- NEW REACTION/NEWSJACKING ENDPOINT ---
+app.post('/api/analyze-reaction', express.json(), async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) {
+      return res.status(400).json({ error: 'URL manquante' });
+    }
+
+    // Instancier le stratège avec le client OpenAI global
+    const strategist = new Strategist(openai);
+    const result = await strategist.analyzeReaction(url);
+
+    if (result.error) {
+       // On renvoie 200 avec message d'erreur pour que le front puisse l'afficher proprement
+       return res.json({ error: result.error }); 
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('API Error /api/analyze-reaction:', error);
+    res.status(500).json({ error: 'Erreur interne du serveur lors de l\'analyse.' });
   }
 });
 
@@ -960,11 +1880,19 @@ function getGoalAccount(text) {
 // --- NEW NEWSJACKING STRATEGY ---
 async function getNewsjackingContext(userText) {
     try {
-        // 1. Get Trends via Robust Service (Cache/Redis/File)
-        // Replaces direct Google API call which was unstable
-        const trends = await fetchTrendingTopics();
+        // 1. Get Trends avec sécurité (Timeout + Fallback)
+        let trends = null;
+        try {
+            // On race la requête contre un timeout de 2s
+            trends = await Promise.race([
+                fetchTrendingTopics(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Trends timeout')), 2000))
+            ]);
+        } catch (err) {
+            console.warn('⚠️ Trends fetch warning:', err.message);
+            trends = null; // Continue sans trends
+        }
         
-        // Extract Top Trend
         let currentTrend = "L'engouement autour de l'IA générative";
         if (trends && trends.keywords && trends.keywords.length > 0) {
              currentTrend = trends.keywords[0];
@@ -972,24 +1900,95 @@ async function getNewsjackingContext(userText) {
              currentTrend = trends.hashtags[0];
         }
 
-        // 2. Strict Influencer Selection from DB
-        const influencer = getGoalAccount(userText || "");
+        // 2. Get Goal Account (appeler le service Python) avec sécurité
+        let influencer = null;
+        try {
+            // On race le script python contre un timeout de 3s
+            const influencerResult = await Promise.race([
+                callInfluencerSelector(userText),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Python timeout')), 3000))
+            ]);
+
+            influencer = (influencerResult && influencerResult.success) 
+              ? influencerResult.account
+              : getGoalAccount(userText);
+
+        } catch (err) {
+            console.warn('⚠️ Python selector warning:', err.message);
+            influencer = getGoalAccount(userText); // Fallback immédiat
+        }
 
         return { currentTrend, influencer };
 
     } catch (e) {
-        console.warn('Trends Fetch Error, using fallback:', e);
-        // Fallback Safe
+        console.warn('Newsjacking Context Critical Error (using hard fallback):', e.message);
         return { 
-            currentTrend: "La sortie imminente de GTA VI", 
-            influencer: getGoalAccount(userText || "") // Ensure string passed
+            currentTrend: "La tech et l'innovation", 
+            influencer: getGoalAccount(userText)
         };
     }
+}
+
+// Helper: Call Python influencer selector
+async function callInfluencerSelector(userText) {
+  return new Promise((resolve) => {
+    const python = spawn('python3', [
+      path.join(__dirname, 'services', 'influencer_selector.py'),
+      userText || ''
+    ]);
+
+    let output = '';
+    let errorOutput = '';
+
+    // --- MISE A JOUR DE SECURITE ---
+    // Empêche le crash si python3 n'est pas installé ou échoue
+    python.on('error', (err) => {
+      console.warn('⚠️ Python spawn failed (python3 installed?):', err.message);
+      resolve({ success: false, error: 'spawn error' });
+    });
+    // -------------------------------
+    
+    python.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+
+    python.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+      console.warn('[Python stderr]', data.toString());
+    });
+
+    python.on('close', (code) => {
+      try {
+        const result = JSON.parse(output);
+        resolve(result);
+      } catch (e) {
+        console.error('Failed to parse Python output:', output, 'Error:', errorOutput);
+        resolve({ success: false, error: 'Python parse error', details: errorOutput });
+      }
+    });
+
+    setTimeout(() => {
+      python.kill();
+      resolve({ success: false, error: 'timeout' });
+    }, 5000);
+  });
 }
 
 app.post('/api/chat', express.json(), async (req, res) => {
     try {
         const { message, history = [], platforms = ['facebook', 'instagram', 'twitter', 'linkedin'], media } = req.body;
+        
+        // --- START: Simulation d'erreur initiale pour tests ---
+        if (process.env.SIMULATE_INIT_CHAT_ERROR === 'true') {
+          const force = req.body && req.body.simulate_init_error === true || req.query.simulate_init_error === '1';
+          if (!req.session._simulatedChatErrorInjected || force) {
+            req.session._simulatedChatErrorInjected = true;
+            req.session.save(() => {});
+            console.warn('[SIMULATION] Returning simulated 500 error for /api/chat (initial).');
+            return res.status(500).json({ error: 'Erreur réseau (simulation)' });
+          }
+        }
+        // --- END: Simulation d'erreur initiale pour tests ---
         
         console.log(`[Chat API] Received message: "${message ? message.substring(0, 50) : 'null'}..."`);
 
@@ -1008,24 +2007,23 @@ app.post('/api/chat', express.json(), async (req, res) => {
             let failureReason = "Service non configuré";
 
             try {
-                 // APPEL RÉEL (Plus de simulation forcée)
-                 const analysis = await VideoAI.analyzeVideo(media.url);
+                 // TIMEOUT DE SÉCURITÉ : Evite le blocage infini si VideoAI plante
+                 const analysis = await Promise.race([
+                     VideoAI.analyzeVideo(media.url),
+                     new Promise((_, reject) => setTimeout(() => reject(new Error('Video analysis timeout')), 8000))
+                 ]);
                  
-                 // Si c'est une simulation (pas de clé API), on CONTINUE AVEC VIDÉO (Logique "Default Allow")
                  if (analysis.is_simulation) {
-                     isSafe = true; // On assume que c'est bon si on n'a pas pu vérifier
+                     isSafe = true;
                      analysisContext = "MEDIA: Vidéo acceptée par défaut (Analyse AI désactivée).";
                  } else {
-                     // Vraie analyse
-                     // Seul le flag explicite 'VERY_LIKELY' ou 'LIKELY' pour unsafe bloquerait
                      isSafe = (analysis.safety === 'safe' || analysis.safety === 'unknown'); 
                      if (!isSafe) failureReason = "Contenu marqué comme UNSAFE par Google.";
                      else analysisContext = `MEDIA: Vidéo validée par Google AI (Safe).`;
                  }
             } catch(e) {
-                 // En cas d'erreur API, on laisse passer la vidéo (Fail Open)
                  isSafe = true;
-                 console.error("Video Check Failed (Continuing anyway):", e);
+                 console.error("Video Check Failed (Continuing anyway):", e.message);
                  analysisContext = "MEDIA: Vidéo acceptée par défaut (Erreur service AI).";
             }
 
@@ -1033,9 +2031,7 @@ app.post('/api/chat', express.json(), async (req, res) => {
                 selectedMedia = { type: 'video', url: media.url, poster: media.poster };
             } else {
                 console.warn(`⚠️ Video rejected: ${failureReason}`);
-                // FALLBACK SUR L'IMAGE
                 selectedMedia = { type: 'image', url: media.poster, isFallback: true };
-                // ON PRÉVIENT L'UTILISATEUR VIA LE CONTEXTE
                 analysisContext = `MEDIA NOTE: La vidéo a été rejetée ou n'a pas pu être analysée (${failureReason}). L'image de couverture est utilisée à la place.`;
             }
         } else if (media && media.type === 'image') {
@@ -1049,49 +2045,31 @@ app.post('/api/chat', express.json(), async (req, res) => {
         if (isCorrectionRequest) {
              systemPrompt = SYSTEM_PROMPT_CORRECTOR;
         } else {
-             systemPrompt = `
-      Tu es un expert en Social Media "Newsjacking" pour Spread It.
-      
-      CONTEXTE MEDIA : ${analysisContext}
-      
-      RÈGLES :
-      1. TEXTE : Corrige la grammaire, garde le ton humain/imparfait.
-      2. TENDANCE : Lie le sujet à la tendance actuelle : ${currentTrend}.
-      3. INFLUENCEUR : Mentionne obligatoirement ${influencer.name} (@${influencer.handle}) dans le style "${influencer.style}".
-      4. BRANDING : N'oublie pas que le post inclura un petit logo "Spread It" en filigrane pour la publicité.
-      
-      FORMAT JSON STRICT :
-      {
-         "reply": "Commentaire sur la stratégie (mentionne si on utilise la vidéo ou la photo selon le check Google).",
-         "cards": {
-             "facebook": "Post complet FB...",
-             "instagram": "Légende Insta (visuel fort)...",
-             "twitter": "Tweet percutant...",
-             "linkedin": "Post LinkedIn structuré...",
-             "tiktok": "Script/Description TikTok..."
-         },
-         "mediaUsed": ${JSON.stringify(selectedMedia || null)} 
-      }
-      `;
+             // Utilisation du Stratège pour le prompt système unifié (Manifesto V2)
+             const strategist = new Strategist(null);
+             systemPrompt = strategist.generateChatPrompt(analysisContext, currentTrend, influencer, selectedMedia);
         }
 
         const messages = [
             { role: 'system', content: systemPrompt },
             ...history,
-            { role: 'user', content: `TEXTE UTILISATEUR : ${message}` }
+            { role: 'user', content: message ? `TEXTE UTILISATEUR : ${message}` : "Analyse le média fourni ci-dessus." }
         ];
 
+        // Utiliser gpt-4o pour JSON object (plus fiable que gpt-4o-mini)
+        const modelForJson = 'gpt-4o';
+        
         const completion = await openai.chat.completions.create({
-            model: 'gpt-4',
-            messages: messages,
-            temperature: 0.8, // Increased creativity for newsjacking
-            response_format: { type: "json_object" }
+          model: modelForJson,
+          messages: messages,
+          temperature: 0.8,
+          response_format: { type: "json_object" }
         });
 
         let content = completion.choices[0].message.content;
         console.log("[Chat API] OpenAI Response:", content.substring(0, 100) + "...");
 
-        // SANITIZE JSON (Strip Markdown if present)
+        // SANITIZE JSON
         content = content.replace(/```json/g, '').replace(/```/g, '').trim();
 
         let result;
@@ -1099,14 +2077,13 @@ app.post('/api/chat', express.json(), async (req, res) => {
             result = JSON.parse(content);
         } catch (jsonError) {
             console.error("[Chat API] JSON Parse Error:", jsonError);
-            console.error("[Chat API] Raw Content:", content);
             throw new Error("Erreur de format de réponse AI (JSON invalide).");
         }
 
         res.json(result);
 
     } catch (e) {
-        console.error('Chat API Error:', e);
+        console.error('🔴 Chat API Error:', e.message);
         res.status(500).json({ error: e.message });
     }
 });
@@ -1116,13 +2093,11 @@ app.get('/api/ai-stream', async (req, res) => {
   const prompt = req.query.prompt ? String(req.query.prompt) : '';
   if (!prompt) return res.status(400).json({ error: 'Prompt missing' });
 
-  // Headers for SSE
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders && res.flushHeaders();
 
-  // Helper to send SSE data
   const send = (data) => {
     try {
       res.write(`data: ${data}\n\n`);
@@ -1131,17 +2106,14 @@ app.get('/api/ai-stream', async (req, res) => {
     }
   };
 
-  // Attempt real streaming with OpenAI if supported, otherwise fallback to chunking full reply
   (async () => {
     try {
-      // Attempt streaming call
-      const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+      const model = resolveChatModel();
       let attemptedStream = false;
 
       if (openai && typeof openai.chat === 'object' && typeof openai.chat.completions.create === 'function') {
         try {
-          const systemPrompt = `
-TU ES LE "STRATEGIST" DE SPREAD IT.
+          const systemPrompt = `TU ES LE "STRATEGIST" DE SPREAD IT.
 TON RÔLE : Partenaire de brainstorming et d'exécution pour les réseaux sociaux.
 
 RÈGLE D'OR #1 : CONTENU "HUMAIN" > PERFECTION ROBOTIQUE
@@ -1172,25 +2144,22 @@ RÈGLE D'OR #3 : PILOTE L'INTERFACE
   "advice": "Conseil stratégique court (ex: Ajoute une image sombre)"
 }
 \`\`\`
-- Ce bloc JSON sera lu par le code pour remplir les cartes. L'utilisateur ne le verra pas s'il est bien formaté.
-`;
+- Ce bloc JSON sera lu par le code pour remplir les cartes. L'utilisateur ne le verra pas s'il est bien formaté.`;
 
           const streamResp = await openai.chat.completions.create({
-            model: "gpt-4", // Utilisation de GPT-4 pour suivre les instructions complexes JSON
+            model: model,
             messages: [
               { role: 'system', content: systemPrompt },
               { role: 'user', content: prompt }
             ],
             max_tokens: 1500,
-            temperature: 0.8, // Un peu plus créatif pour le côté humain
+            temperature: 0.8,
             stream: true
           });
 
-          // If the client library returns an async iterable
           if (streamResp[Symbol.asyncIterator]) {
             attemptedStream = true;
             for await (const part of streamResp) {
-              // Attempt to extract text chunk
               const chunkText = (part && part.choices && part.choices[0] && (part.choices[0].delta?.content || part.choices[0].message?.content)) || '';
               if (chunkText) send(chunkText.replace(/\n/g, '\\n'));
             }
@@ -1201,7 +2170,6 @@ RÈGLE D'OR #3 : PILOTE L'INTERFACE
       }
 
       if (!attemptedStream) {
-        // Fallback: non-streaming call then send incremental chunks
         const resp = await openai.chat.completions.create({
           model: model,
           messages: [
@@ -1216,16 +2184,13 @@ RÈGLE D'OR #3 : PILOTE L'INTERFACE
           ? String(resp.choices[0].message.content)
           : '';
 
-        // Split into reasonable chunks (sentences) and stream them
         const chunks = full.match(/[^\.\!\?]+[\.\!\?]?/g) || [full];
         for (const c of chunks) {
           send(c.trim().replace(/\n/g, '\\n'));
-          // Small pause so client sees progressive text
           await new Promise(r => setTimeout(r, 180));
         }
       }
 
-      // Signal end
       res.write('event: end\ndata: {}\n\n');
       res.end();
 
@@ -1236,119 +2201,15 @@ RÈGLE D'OR #3 : PILOTE L'INTERFACE
   })();
 });
 
-app.get('/smart-share', (req, res) => {
-    const { image, video, title, text, source } = req.query;
-    res.render('smart-share', {
-        title: 'Smart Share',
-        data: {
-            image,
-            video,
-            title,
-            text,
-            source
-        }
-    });
-});
-
-app.post('/create', upload.single('content_file'), async (req, res) => {
-  try {
-    let content = req.body.content || '';
-    let mediaPath = null;
-    let mediaType = null;
-
-    // Si un fichier est uploadé, extraire le contenu
-    if (req.file) {
-      if (req.file.mimetype.startsWith('image/')) {
-        mediaPath = req.file.path;
-        mediaType = 'image';
-      } else if (req.file.mimetype.startsWith('video/')) {
-        mediaPath = req.file.path;
-        mediaType = 'video';
-      } else {
-        content = await extractContentFromFile(req.file);
-        mediaType = 'document';
-      }
-    }
-
-    if (!content.trim() && !mediaPath) {
-      return res.status(400).json({ error: 'Contenu, image ou vidéo requis' });
-    }
-
-    // Modération du contenu
-    const moderationResult = await moderateContent(content, mediaPath, mediaType);
-    if (!moderationResult.safe) {
-      return res.status(400).json({
-        error: 'Contenu inapproprié détecté',
-        score: moderationResult.score,
-        reasons: moderationResult.reasons
-      });
-    }
-
-    // Tendance du moment pour enrichir le prompt
-    const trendingContext = await fetchTrendingTopics();
-
-    // Amélioration du contenu avec IA
-    const aiResult = await improveContentWithAI(content, req.body, trendingContext);
-
-    // Générer les versions censurées si nécessaire
-    let censoredContent = null;
-    let censoredMediaPath = null;
-
-    if (moderationResult.score > 0) {
-      censoredContent = censorText(aiResult.improved);
-
-      if (mediaPath && mediaType === 'image') {
-        censoredMediaPath = mediaPath.replace('.jpg', '_censored.jpg').replace('.png', '_censored.png').replace('.gif', '_censored.gif');
-        await censorImage(mediaPath, censoredMediaPath);
-      }
-    }
-
-    // Analyse du timing optimal
-    const optimalTimes = await analyzeOptimalPostingTimes(aiResult);
-
-    // Sauvegarder dans la session
-    req.session.currentContent = {
-      original: content,
-      improved: aiResult.improved,
-      captions: aiResult.captions,
-      hashtags: aiResult.hashtags,
-      sentiment: aiResult.sentiment,
-      seo_score: aiResult.seo_score,
-      optimalTimes: optimalTimes,
-      trending: trendingContext,
-      is_adult: moderationResult.score > 0,
-      censored_content: censoredContent,
-      censored_media: censoredMediaPath,
-      original_media: mediaPath,
-      media_type: mediaType,
-      createdAt: new Date()
-    };
-
-    return req.session.save((sessionError) => {
-      if (sessionError) {
-        console.error('Erreur sauvegarde session:', sessionError);
-        return res.status(500).json({ error: 'Impossible de sauvegarder la session' });
-      }
-
-      res.json({
-        success: true,
-        content: aiResult.improved,
-        captions: aiResult.captions,
-        hashtags: aiResult.hashtags,
-        optimalTimes: optimalTimes,
-        trending: trendingContext,
-        moderation: moderationResult,
-        censored: censoredContent ? {
-          content: censoredContent,
-          image: censoredMediaPath
-        } : null
-      });
-    });
-
-  } catch (error) {
-    console.error('Erreur lors de la création:', error);
-    res.status(500).json({ error: 'Erreur interne du serveur' });
+// Debug endpoint: reset simulation flags for current session (dev only)
+app.get('/debug/reset-simulated-errors', (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ error: 'Forbidden in production' });
   }
+  req.session._simulatedChatErrorInjected = false;
+  req.session.save(() => {
+    res.json({ ok: true, message: 'Simulated chat errors reset for this session' });
+  });
 });
 
 // --- OAUTH ROUTES ---
@@ -1471,14 +2332,23 @@ app.post('/api/share-log', express.json(), async (req, res) => {
 
     // Insert experiment if provided
     if (experiment_id) {
-      try { turso.run('INSERT OR IGNORE INTO experiments (id, name, created_at) VALUES (?,?,?)', [experiment_id, experiment_id, now]); } catch(e){}
+      const expSql = 'INSERT OR IGNORE INTO experiments (id, name, created_at) VALUES (?,?,?)';
+      const expParams = [experiment_id, experiment_id, now];
+      try { 
+        turso.run(expSql, expParams); 
+        if (turso.runCloud) turso.runCloud(expSql, expParams).catch(console.error);
+      } catch(e){}
     }
 
-    turso.run(
-      `INSERT INTO shares (id, experiment_id, user_id, platform, original_content, ai_content, post_id, published_at, meta)
-       VALUES (?,?,?,?,?,?,?,?,?)`,
-      [id, experiment_id, user_id, platform, original, ai, post_id, now, JSON.stringify(payload.meta || {})]
-    );
+    const shareSql = `INSERT INTO shares (id, experiment_id, user_id, platform, original_content, ai_content, post_id, published_at, meta)
+       VALUES (?,?,?,?,?,?,?,?,?)`;
+    const shareParams = [id, experiment_id, user_id, platform, original, ai, post_id, now, JSON.stringify(payload.meta || {})];
+
+    turso.run(shareSql, shareParams);
+    
+    if (turso.runCloud) {
+      turso.runCloud(shareSql, shareParams).catch(e => console.error('Cloud Share Log Error:', e.message));
+    }
 
     res.json({ success: true, id });
   } catch (e) {
@@ -1551,6 +2421,18 @@ app.post('/api/turso/resource', express.json(), async (req, res) => {
   }
 });
 
+function ensureLeadsTable() {
+  try {
+    turso.run(
+      'CREATE TABLE IF NOT EXISTS leads (id TEXT PRIMARY KEY, email TEXT NOT NULL, name TEXT, source TEXT, metadata JSON, created_at INTEGER, status TEXT)',
+      []
+    );
+  } catch (err) {
+    console.warn('[Leads] Création table échouée:', err.message || err);
+    throw err;
+  }
+}
+
 // API pour capture de leads (Connect Gate)
 app.post('/api/leads', async (req, res) => {
   try {
@@ -1560,19 +2442,19 @@ app.post('/api/leads', async (req, res) => {
       return res.status(400).json({ error: 'Email requis' });
     }
 
-    if (mongoClient) {
-      await mongoClient.connect();
-      const db = mongoClient.db('spread_it_leads');
-      const collection = db.collection('leads');
-
-      await collection.insertOne({
-        email: email,
-        name: name || '',
-        source: source || 'connect_gate',
-        metadata: metadata || {},
-        createdAt: new Date(),
-        status: 'active'
-      });
+    // Store lead in Turso
+    const leadSql = `INSERT INTO leads (email, name, source, metadata, created_at, status) VALUES (?, ?, ?, ?, ?, ?)`;
+    const leadParams = [
+      email,
+      name || '',
+      source || 'connect_gate',
+      JSON.stringify(metadata || {}),
+      new Date().toISOString(),
+      'active'
+    ];
+    turso.run(leadSql, leadParams);
+    if (turso.runCloud) {
+      turso.runCloud(leadSql, leadParams).catch(console.error);
     }
 
     res.json({ success: true, message: 'Lead capturé' });
@@ -1675,7 +2557,7 @@ async function moderateContent(content, mediaPath = null, mediaType = null) {
         blocked = true;
         reasons.push(`Blocage Violence: niveau=${violenceLevel}`);
       } else if (racyBlockLevels.includes(racyLevel)) {
-        // Racy ne bloque que aux niveaux très élevés (faces autorisées)
+        // Racy ne bloque qu'à des niveaux élevés (faces autorisées)
         blocked = true;
         reasons.push(`Blocage Racy: niveau=${racyLevel}`);
       }
@@ -1971,11 +2853,12 @@ async function publishToFacebook(content, mediaPath = null, mediaType = null) {
 }
 
 async function publishToInstagram(content, mediaPath = null, mediaType = null) {
-  const userId = process.env.INSTAGRAM_USER_ID;
-  const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
+  // Correction: Utiliser BUSINESS_ID (terme API) ou USER_ID (legacy)
+  const userId = process.env.INSTAGRAM_BUSINESS_ID || process.env.INSTAGRAM_USER_ID;
+  const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN;
 
   if (!userId || !accessToken || !mediaPath) {
-    throw new Error('Configuration Instagram manquante ou pas de média');
+    throw new Error(`Configuration Instagram manquante. (ID: ${userId ? 'OK' : 'MANQUANT'}, Token: ${accessToken ? 'OK' : 'MANQUANT'}, Media: ${mediaPath ? 'OK' : 'MANQUANT'})`);
   }
 
   let containerData = {
@@ -2024,7 +2907,7 @@ async function publishToTwitter(content, mediaPath = null, mediaType = null) {
     const appKey = process.env.TWITTER_APP_KEY || process.env.TWITTER_API_KEY;
     const appSecret = process.env.TWITTER_APP_SECRET || process.env.TWITTER_API_SECRET;
     const accessToken = process.env.TWITTER_ACCESS_TOKEN;
-    const accessSecret = process.env.TWITTER_ACCESS_SECRET;
+    const accessSecret = process.env.TWITTER_ACCESS_TOKEN_SECRET || process.env.TWITTER_ACCESS_SECRET;
 
     if (!appKey || !appSecret || !accessToken || !accessSecret) {
       throw new Error('Twitter credentials missing');
@@ -2229,9 +3112,498 @@ async function scheduleShare(platform, content, scheduleTime) {
 // Tâches planifiées pour les partages programmés
 cron.schedule('* * * * *', () => {
   // Vérifier les partages à publier
-  console.log('Vérification des partages planifiés...');
+  // console.log('Vérification des partages planifiés...');
 });
 
+// =============================================================================
+// OAUTH SETUP ENDPOINTS - Auto Token Renewal
+// =============================================================================
+
+/**
+ * Helper: Update .env.local file with new token
+ */
+function updateEnvFile(key, value) {
+  const envPath = path.join(__dirname, '.env.local');
+  let envContent = '';
+  
+  try {
+    envContent = fs.readFileSync(envPath, 'utf8');
+  } catch (error) {
+    console.error('Error reading .env.local:', error);
+    return false;
+  }
+
+  const lines = envContent.split('\n');
+  let found = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith(`${key}=`)) {
+      lines[i] = `${key}=${value}`;
+      found = true;
+      break;
+    }
+  }
+
+  if (!found) {
+    lines.push(`${key}=${value}`);
+  }
+
+  try {
+    fs.writeFileSync(envPath, lines.join('\n'), 'utf8');
+    // Update process.env immediately
+    process.env[key] = value;
+    console.log(`✅ Updated ${key} in .env.local`);
+    return true;
+  } catch (error) {
+    console.error('Error writing .env.local:', error);
+    return false;
+  }
+}
+
+// -------------------------------------------------------------------
+// AUTH SETUP PAGE
+// -------------------------------------------------------------------
+app.get('/auth/setup', async (req, res) => {
+  try {
+    // Get current platform statuses
+    const statusEndpoint = req.protocol + '://' + req.get('host') + '/api/platforms/status';
+    const statusResponse = await axios.get(statusEndpoint);
+    const platforms = statusResponse.data;
+
+    res.render('auth-setup', { platforms });
+  } catch (error) {
+    console.error('Error loading auth setup:', error);
+    res.render('auth-setup', { platforms: {} });
+  }
+});
+
+// -------------------------------------------------------------------
+// FACEBOOK OAUTH
+// -------------------------------------------------------------------
+app.get('/auth/facebook/start', (req, res) => {
+  const clientId = process.env.FACEBOOK_APP_ID;
+  const redirectUri = `${req.protocol}://${req.get('host')}/auth/facebook/callback`;
+  
+  const scope = 'pages_read_engagement,pages_manage_posts,pages_manage_metadata,instagram_basic,instagram_content_publish';
+  
+  const authUrl = `https://www.facebook.com/v18.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&response_type=code`;
+  
+  res.redirect(authUrl);
+});
+
+app.get('/auth/facebook/callback', async (req, res) => {
+  const code = req.query.code;
+  
+  if (!code) {
+    return res.send(`
+      <script>
+        if (window.opener) {
+          window.opener.postMessage({ type: 'oauth-error', platform: 'facebook', error: 'No code' }, '*');
+        }
+        window.close();
+      </script>
+    `);
+  }
+
+  try {
+    const redirectUri = `${req.protocol}://${req.get('host')}/auth/facebook/callback`;
+    
+    // Exchange code for short-lived token
+    const tokenResponse = await axios.get('https://graph.facebook.com/v18.0/oauth/access_token', {
+      params: {
+        client_id: process.env.FACEBOOK_APP_ID,
+        client_secret: process.env.FACEBOOK_APP_SECRET,
+        redirect_uri: redirectUri,
+        code: code
+      }
+    });
+
+    const shortToken = tokenResponse.data.access_token;
+
+    // Exchange for long-lived token (60 days)
+    const longTokenResponse = await axios.get('https://graph.facebook.com/v18.0/oauth/access_token', {
+      params: {
+        grant_type: 'fb_exchange_token',
+        client_id: process.env.FACEBOOK_APP_ID,
+        client_secret: process.env.FACEBOOK_APP_SECRET,
+        fb_exchange_token: shortToken
+      }
+    });
+
+    const longToken = longTokenResponse.data.access_token;
+
+    // Get Page Access Token (never expires if user doesn't change password)
+    const pagesResponse = await axios.get('https://graph.facebook.com/v18.0/me/accounts', {
+      params: {
+        access_token: longToken,
+        fields: 'access_token,name,id'
+      }
+    });
+
+    const pageData = pagesResponse.data.data.find(page => page.id === process.env.FACEBOOK_PAGE_ID);
+    
+    if (!pageData) {
+      throw new Error('Page not found');
+    }
+
+    const pageToken = pageData.access_token;
+
+    // Update .env.local
+    updateEnvFile('FACEBOOK_ACCESS_TOKEN', pageToken);
+    updateEnvFile('INSTAGRAM_ACCESS_TOKEN', pageToken);
+
+    res.send(`
+      <html>
+        <head><style>body{font-family:Arial;display:flex;align-items:center;justify-content:center;height:100vh;background:#10b981;color:white;text-align:center;}</style></head>
+        <body>
+          <div>
+            <h1 style="font-size:48px;margin:0;">✅</h1>
+            <h2>Facebook & Instagram connectés!</h2>
+            <p>Cette fenêtre va se fermer automatiquement...</p>
+          </div>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({ type: 'oauth-success', platform: 'facebook' }, '*');
+            }
+            setTimeout(() => window.close(), 2000);
+          </script>
+        </body>
+      </html>
+    `);
+
+  } catch (error) {
+    console.error('Facebook OAuth error:', error);
+    res.send(`
+      <html>
+        <head><style>body{font-family:Arial;display:flex;align-items:center;justify-content:center;height:100vh;background:#ef4444;color:white;text-align:center;}</style></head>
+        <body>
+          <div>
+            <h1 style="font-size:48px;margin:0;">❌</h1>
+            <h2>Erreur de connexion</h2>
+            <p>${error.message}</p>
+          </div>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({ type: 'oauth-error', platform: 'facebook', error: '${error.message}' }, '*');
+            }
+            setTimeout(() => window.close(), 3000);
+          </script>
+        </body>
+      </html>
+    `);
+  }
+});
+
+// -------------------------------------------------------------------
+// LINKEDIN OAUTH
+// -------------------------------------------------------------------
+app.get('/auth/linkedin/start', (req, res) => {
+  const clientId = process.env.LINKEDIN_CLIENT_ID;
+  const redirectUri = `${req.protocol}://${req.get('host')}/auth/linkedin/callback`;
+  const scope = 'w_member_social r_basicprofile';
+  const state = randomUUID();
+  
+  req.session.linkedinState = state;
+  
+  const authUrl = `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&state=${state}`;
+  
+  res.redirect(authUrl);
+});
+
+app.get('/auth/linkedin/callback', async (req, res) => {
+  const { code, state } = req.query;
+  
+  if (!code || state !== req.session.linkedinState) {
+    return res.send(`
+      <script>
+        if (window.opener) {
+          window.opener.postMessage({ type: 'oauth-error', platform: 'linkedin', error: 'Invalid state' }, '*');
+        }
+        window.close();
+      </script>
+    `);
+  }
+
+  try {
+    const redirectUri = `${req.protocol}://${req.get('host')}/auth/linkedin/callback`;
+    
+    // Exchange code for access token
+    const tokenResponse = await axios.post('https://www.linkedin.com/oauth/v2/accessToken', null, {
+      params: {
+        grant_type: 'authorization_code',
+        code: code,
+        client_id: process.env.LINKEDIN_CLIENT_ID,
+        client_secret: process.env.LINKEDIN_CLIENT_SECRET,
+        redirect_uri: redirectUri
+      },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
+
+    const accessToken = tokenResponse.data.access_token;
+
+    // Get Person URN automatically
+    const meResponse = await axios.get('https://api.linkedin.com/v2/me', {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+
+    const personUrn = `urn:li:person:${meResponse.data.id}`;
+
+    // Update .env.local
+    updateEnvFile('LINKEDIN_ACCESS_TOKEN', accessToken);
+    updateEnvFile('LINKEDIN_PERSON_URN', personUrn);
+
+    res.send(`
+      <html>
+        <head><style>body{font-family:Arial;display:flex;align-items:center;justify-content:center;height:100vh;background:#0A66C2;color:white;text-align:center;}</style></head>
+        <body>
+          <div>
+            <h1 style="font-size:48px;margin:0;">✅</h1>
+            <h2>LinkedIn connecté!</h2>
+            <p>Token valide pour 60 jours</p>
+          </div>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({ type: 'oauth-success', platform: 'linkedin' }, '*');
+            }
+            setTimeout(() => window.close(), 2000);
+          </script>
+        </body>
+      </html>
+    `);
+
+  } catch (error) {
+    console.error('LinkedIn OAuth error:', error);
+    res.send(`
+      <html>
+        <head><style>body{font-family:Arial;display:flex;align-items:center;justify-content:center;height:100vh;background:#ef4444;color:white;text-align:center;}</style></head>
+        <body>
+          <div>
+            <h1 style="font-size:48px;margin:0;">❌</h1>
+            <h2>Erreur de connexion</h2>
+            <p>${error.message}</p>
+          </div>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({ type: 'oauth-error', platform: 'linkedin', error: '${error.message}' }, '*');
+            }
+            setTimeout(() => window.close(), 3000);
+          </script>
+        </body>
+      </html>
+    `);
+  }
+});
+
+// -------------------------------------------------------------------
+// YOUTUBE OAUTH
+// -------------------------------------------------------------------
+app.get('/auth/youtube/start', (req, res) => {
+  const { google } = require('googleapis');
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.YOUTUBE_CLIENT_ID,
+    process.env.YOUTUBE_CLIENT_SECRET,
+    `${req.protocol}://${req.get('host')}/auth/youtube/callback`
+  );
+
+  const scopes = [
+    'https://www.googleapis.com/auth/youtube.upload',
+    'https://www.googleapis.com/auth/youtube'
+  ];
+
+  const authUrl = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: scopes,
+    prompt: 'consent' // Force prompt to get refresh token
+  });
+
+  res.redirect(authUrl);
+});
+
+app.get('/auth/youtube/callback', async (req, res) => {
+  const { code } = req.query;
+  
+  if (!code) {
+    return res.send(`
+      <script>
+        if (window.opener) {
+          window.opener.postMessage({ type: 'oauth-error', platform: 'youtube', error: 'No code' }, '*');
+        }
+        window.close();
+      </script>
+    `);
+  }
+
+  try {
+    const { google } = require('googleapis');
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.YOUTUBE_CLIENT_ID,
+      process.env.YOUTUBE_CLIENT_SECRET,
+      `${req.protocol}://${req.get('host')}/auth/youtube/callback`
+    );
+
+    const { tokens } = await oauth2Client.getToken(code);
+    const refreshToken = tokens.refresh_token;
+
+    if (!refreshToken) {
+      throw new Error('No refresh token received. Try revoking app access and reconnecting.');
+    }
+
+    // Update .env.local
+    updateEnvFile('YOUTUBE_REFRESH_TOKEN', refreshToken);
+
+    res.send(`
+      <html>
+        <head><style>body{font-family:Arial;display:flex;align-items:center;justify-content:center;height:100vh;background:#FF0000;color:white;text-align:center;}</style></head>
+        <body>
+          <div>
+            <h1 style="font-size:48px;margin:0;">✅</h1>
+            <h2>YouTube connecté!</h2>
+            <p>Refresh token sauvegardé</p>
+          </div>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({ type: 'oauth-success', platform: 'youtube' }, '*');
+            }
+            setTimeout(() => window.close(), 2000);
+          </script>
+        </body>
+      </html>
+    `);
+
+  } catch (error) {
+    console.error('YouTube OAuth error:', error);
+    res.send(`
+      <html>
+        <head><style>body{font-family:Arial;display:flex;align-items:center;justify-content:center;height:100vh;background:#ef4444;color:white;text-align:center;}</style></head>
+        <body>
+          <div>
+            <h1 style="font-size:48px;margin:0;">❌</h1>
+            <h2>Erreur de connexion</h2>
+            <p>${error.message}</p>
+          </div>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({ type: 'oauth-error', platform: 'youtube', error: '${error.message}' }, '*');
+            }
+            setTimeout(() => window.close(), 3000);
+          </script>
+        </body>
+      </html>
+    `);
+  }
+});
+
+// -------------------------------------------------------------------
+// TIKTOK OAUTH
+// -------------------------------------------------------------------
+app.get('/auth/tiktok/start', (req, res) => {
+  const clientKey = process.env.TIKTOK_CLIENT_KEY;
+  const redirectUri = process.env.TIKTOK_REDIRECT_URI || `${req.protocol}://${req.get('host')}/auth/tiktok/callback`;
+  const scope = 'user.info.basic,video.publish';
+  const state = randomUUID();
+  
+  req.session.tiktokState = state;
+  
+  const authUrl = `https://www.tiktok.com/v2/auth/authorize?client_key=${clientKey}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&response_type=code&state=${state}`;
+  
+  res.redirect(authUrl);
+});
+
+app.get('/auth/tiktok/callback', async (req, res) => {
+  const { code, state } = req.query;
+  
+  if (!code || state !== req.session.tiktokState) {
+    return res.send(`
+      <script>
+        if (window.opener) {
+          window.opener.postMessage({ type: 'oauth-error', platform: 'tiktok', error: 'Invalid state' }, '*');
+        }
+        window.close();
+      </script>
+    `);
+  }
+
+  try {
+    // Exchange code for access token
+    const tokenResponse = await axios.post('https://open.tiktokapis.com/v2/oauth/token/', {
+      client_key: process.env.TIKTOK_CLIENT_KEY,
+      client_secret: process.env.TIKTOK_CLIENT_SECRET,
+      code: code,
+      grant_type: 'authorization_code',
+      redirect_uri: process.env.TIKTOK_REDIRECT_URI
+    }, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
+
+    const accessToken = tokenResponse.data.access_token;
+    const refreshToken = tokenResponse.data.refresh_token;
+
+    // Update .env.local
+    updateEnvFile('TIKTOK_ACCESS_TOKEN', accessToken);
+    if (refreshToken) {
+      updateEnvFile('TIKTOK_REFRESH_TOKEN', refreshToken);
+    }
+
+    res.send(`
+      <html>
+        <head><style>body{font-family:Arial;display:flex;align-items:center;justify-content:center;height:100vh;background:#000000;color:white;text-align:center;}</style></head>
+        <body>
+          <div>
+            <h1 style="font-size:48px;margin:0;">✅</h1>
+            <h2>TikTok connecté!</h2>
+            <p>Access token sauvegardé</p>
+          </div>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({ type: 'oauth-success', platform: 'tiktok' }, '*');
+            }
+            setTimeout(() => window.close(), 2000);
+          </script>
+        </body>
+      </html>
+    `);
+
+  } catch (error) {
+    console.error('TikTok OAuth error:', error);
+    res.send(`
+      <html>
+        <head><style>body{font-family:Arial;display:flex;align-items:center;justify-content:center;height:100vh;background:#ef4444;color:white;text-align:center;}</style></head>
+        <body>
+          <div>
+            <h1 style="font-size:48px;margin:0;">❌</h1>
+            <h2>Erreur de connexion</h2>
+            <p>${error.response?.data?.message || error.message}</p>
+            <p style="font-size:12px;">Note: TikTok doit être en Production Mode</p>
+          </div>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({ type: 'oauth-error', platform: 'tiktok', error: '${error.message}' }, '*');
+            }
+            setTimeout(() => window.close(), 3000);
+          </script>
+        </body>
+      </html>
+    `);
+  }
+});
+
+// --- GLOBAL ERROR HANDLER (Dernier rempart anti-crash) ---
+// Doit être défini en DERNIER, après toutes les routes
+app.use((err, req, res, next) => {
+  console.error('🔥 UNHANDLED EXPRESS ERROR:', err.stack);
+  if (!res.headersSent) {
+    res.status(500).json({ 
+      error: 'Internal Server Error', 
+      details: process.env.NODE_ENV === 'development' ? err.message : 'Une erreur interne est survenue.'
+    });
+  }
+});
 
 // Démarrage du serveur si on n'est pas en mode test
 if (process.env.NODE_ENV !== 'test') {
@@ -2239,219 +3611,5 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(`Spread It server running on port ${PORT}`);
   });
 }
-
-// --- ROUTE POUR LE DASHBOARD D'APPRENTISSAGE ---
-app.get('/learning-dashboard', (req, res) => {
-    res.send(`
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Learning Dashboard - Spread It</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body>
-    <div class="container mt-5">
-        <h1 class="mb-4">🤖 AI Learning Dashboard</h1>
-        
-        <div class="row">
-            <div class="col-md-4">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Total Posts</h5>
-                        <h2 id="totalPosts">-</h2>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Avg Engagement</h5>
-                        <h2 id="avgEngagement">-%</h2>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Learning Status</h5>
-                        <h2 id="learningStatus">-</h2>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row mt-4">
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">Platform Performance</div>
-                    <div class="card-body">
-                        <canvas id="platformChart"></canvas>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">Best Performing Posts</div>
-                    <div class="card-body">
-                        <div id="bestPosts" class="list-group"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row mt-4">
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">Performance Criteria</div>
-                    <div class="card-body">
-                        <div id="performanceCriteria" class="text-center">
-                            <div class="spinner-border" role="status">
-                                <span class="visually-hidden">Loading...</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">Learned Patterns</div>
-                    <div class="card-body">
-                        <div id="learnedPatterns" class="text-center">
-                            <div class="spinner-border" role="status">
-                                <span class="visually-hidden">Loading...</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        async function loadDashboard() {
-            try {
-                const response = await fetch('/api/learning-dashboard');
-                const data = await response.json();
-                
-                document.getElementById('totalPosts').textContent = data.totalPosts || 0;
-                document.getElementById('avgEngagement').textContent = data.averageEngagement + '%';
-                document.getElementById('learningStatus').textContent = data.learningEfficiency || 'Unknown';
-                
-                // Platform Chart
-                const ctx = document.getElementById('platformChart').getContext('2d');
-                new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: data.platformStats?.map(p => p._id) || [],
-                        datasets: [{
-                            label: 'Average Engagement %',
-                            data: data.platformStats?.map(p => Math.round(p.avgEngagement * 100) / 100) || [],
-                            backgroundColor: 'rgba(54, 162, 235, 0.5)'
-                        }]
-                    }
-                });
-                
-                // Best Posts
-                const bestPostsDiv = document.getElementById('bestPosts');
-                bestPostsDiv.innerHTML = '<h6>Posts Performants (>10% engagement)</h6>';
-                if (data.bestPerforming) {
-                    data.bestPerforming.forEach(post => {
-                        const item = document.createElement('div');
-                        item.className = 'list-group-item d-flex justify-content-between align-items-center';
-                        item.innerHTML = \`
-                            <div>
-                                <strong>\${post.platform}</strong> - \${post.engagement}% engagement<br>
-                                <small class="text-muted">\${post.content}</small>
-                            </div>
-                            <span class="badge bg-success">\${post.engagement}%</span>
-                        \`;
-                        bestPostsDiv.appendChild(item);
-                    });
-                }
-                
-                // Recent Posts Table
-                const tbody = document.getElementById('recentTableBody');
-                tbody.innerHTML = '';
-                if (data.recentPosts) {
-                    data.recentPosts.forEach(post => {
-                        const row = document.createElement('tr');
-                        const engagementBadge = post.engagement === 'pending' ? 
-                            '<span class="badge bg-warning">Pending</span>' : 
-                            \`<span class="badge bg-\${parseFloat(post.engagement) > 10 ? 'success' : 'secondary'}">\${post.engagement}</span>\`;
-                        row.innerHTML = \`
-                            <td><strong>\${post.platform}</strong></td>
-                            <td>\${post.content}</td>
-                            <td>\${engagementBadge}</td>
-                            <td>\${new Date(post.posted).toLocaleDateString()}</td>
-                        \`;
-                        tbody.appendChild(row);
-                    });
-                }
-                
-                // Performance Criteria
-                const criteriaDiv = document.getElementById('performanceCriteria');
-                if (data.performanceCriteria) {
-                    criteriaDiv.innerHTML = \`
-                        <h5>Auto-Generated Targets</h5>
-                        <div class="row text-center">
-                            <div class="col-4">
-                                <div class="p-2 bg-light rounded">
-                                    <div class="h4 text-warning">\${data.performanceCriteria.minEngagement}%</div>
-                                    <small>Minimum Target</small>
-                                </div>
-                            </div>
-                            <div class="col-4">
-                                <div class="p-2 bg-light rounded">
-                                    <div class="h4 text-primary">\${Math.round(data.performanceCriteria.targetEngagement)}%</div>
-                                    <small>Good Target</small>
-                                </div>
-                            </div>
-                            <div class="col-4">
-                                <div class="p-2 bg-light rounded">
-                                    <div class="h4 text-success">\${Math.round(data.performanceCriteria.excellentThreshold)}%</div>
-                                    <small>Excellent</small>
-                                </div>
-                            </div>
-                        </div>
-                        <small class="text-muted">Based on \${data.performanceCriteria.basedOnPosts} posts</small>
-                    \`;
-                }
-                
-                // Learned Patterns
-                const patternsDiv = document.getElementById('learnedPatterns');
-                if (data.learnedPatterns) {
-                    patternsDiv.innerHTML = \`
-                        <h5>Winning Formulas</h5>
-                        <div class="list-group list-group-flush">
-                            <div class="list-group-item">
-                                <strong>Best Structure:</strong> \${data.learnedPatterns.bestStructure || 'Learning...'}
-                            </div>
-                            <div class="list-group-item">
-                                <strong>Top Style:</strong> \${data.learnedPatterns.topStyle || 'Learning...'}
-                            </div>
-                            <div class="list-group-item">
-                                <strong>Success Rate:</strong> \${data.learnedPatterns.successRate || '0'}% of posts hit targets
-                            </div>
-                            <div class="list-group-item">
-                                <strong>Optimal Length:</strong> \${data.learnedPatterns.optimalLength || '150'} characters
-                            </div>
-                        </div>
-                    \`;
-                }
-                
-            } catch (error) {
-                console.error('Error loading dashboard:', error);
-            }
-        }
-        
-        loadDashboard();
-    </script>
-</body>
-</html>
-    `);
-});
 
 module.exports = app;
