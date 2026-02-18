@@ -3198,7 +3198,8 @@ app.get('/auth/facebook/start', (req, res) => {
   const clientId = process.env.FACEBOOK_APP_ID;
   const redirectUri = `${getBaseUrl(req)}/auth/facebook/callback`;
   
-  const scope = 'pages_read_engagement,pages_manage_posts,pages_manage_metadata,instagram_basic,instagram_content_publish';
+  // Removed pages_manage_metadata (deprecated/invalid scope)
+  const scope = 'pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish';
   
   const authUrl = `https://www.facebook.com/v18.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&response_type=code`;
   
