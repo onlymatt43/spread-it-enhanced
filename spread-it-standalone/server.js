@@ -407,14 +407,14 @@ try {
   turso.migrate();
   console.info('✅ Turso/SQLite DB initialized');
 
-  // Async init for Cloud DB (Fire and forget, but log)
-  if (turso.migrateCloud) {
-    turso.migrateCloud().then(() => {
-       console.info('✅ Turso/LibSQL Cloud DB checked/migrated');
-    }).catch(e => {
-       console.warn('⚠️ Turso/LibSQL Cloud DB init failed:', e.message);
-    });
-  }
+  // Cloud DB disabled - using local SQLite only
+  // if (turso.migrateCloud) {
+  //   turso.migrateCloud().then(() => {
+  //      console.info('✅ Turso/LibSQL Cloud DB checked/migrated');
+  //   }).catch(e => {
+  //      console.warn('⚠️ Turso/LibSQL Cloud DB init failed:', e.message);
+  //   });
+  // }
 
 } catch (e) {
   console.warn('Turso DB not initialized:', e && e.message ? e.message : e);
