@@ -94,6 +94,19 @@ const cookieSecure = process.env.SESSION_COOKIE_SECURE
 const cookieSameSite = process.env.SESSION_COOKIE_SAMESITE || (runningOnRender ? 'none' : 'lax');
 // Note: env validation is invoked after helpers are defined below.
 
+// Helper function to get correct base URL (force HTTPS on Render/production)
+function getBaseUrl(req) {
+  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  const host = req.get('host');
+  
+  // Force HTTPS in production (Render) to avoid Facebook security warning
+  if (runningOnRender || isProduction) {
+    return `https://${host}`;
+  }
+  
+  return `${proto}://${host}`;
+}
+
 
 // --- Env Validation Helpers ---
 const PLACEHOLDER_PATTERNS = [/^REPLACE/i, /^dummy$/i, /^YOUR_NEW_API_KEY_HERE$/i];
@@ -3183,7 +3196,7 @@ app.get('/auth/setup', async (req, res) => {
 // -------------------------------------------------------------------
 app.get('/auth/facebook/start', (req, res) => {
   const clientId = process.env.FACEBOOK_APP_ID;
-  const redirectUri = `${req.protocol}://${req.get('host')}/auth/facebook/callback`;
+  const redirectUri = `${getBaseUrl(req)}/auth/facebook/callback`;
   
   const scope = 'pages_read_engagement,pages_manage_posts,pages_manage_metadata,instagram_basic,instagram_content_publish';
   
@@ -3207,7 +3220,7 @@ app.get('/auth/facebook/callback', async (req, res) => {
   }
 
   try {
-    const redirectUri = `${req.protocol}://${req.get('host')}/auth/facebook/callback`;
+    const redirectUri = `${getBaseUrl(req)}/auth/facebook/callback`;
     
     // Exchange code for short-lived token
     const tokenResponse = await axios.get('https://graph.facebook.com/v18.0/oauth/access_token', {
@@ -3300,7 +3313,7 @@ app.get('/auth/facebook/callback', async (req, res) => {
 // -------------------------------------------------------------------
 app.get('/auth/linkedin/start', (req, res) => {
   const clientId = process.env.LINKEDIN_CLIENT_ID;
-  const redirectUri = `${req.protocol}://${req.get('host')}/auth/linkedin/callback`;
+  const redirectUri = `${getBaseUrl(req)}/auth/linkedin/callback`;
   const scope = 'w_member_social r_basicprofile';
   const state = randomUUID();
   
@@ -3326,7 +3339,7 @@ app.get('/auth/linkedin/callback', async (req, res) => {
   }
 
   try {
-    const redirectUri = `${req.protocol}://${req.get('host')}/auth/linkedin/callback`;
+    const redirectUri = `${getBaseUrl(req)}/auth/linkedin/callback`;
     
     // Exchange code for access token
     const tokenResponse = await axios.post('https://www.linkedin.com/oauth/v2/accessToken', null, {
@@ -3503,7 +3516,7 @@ app.get('/auth/youtube/callback', async (req, res) => {
 // -------------------------------------------------------------------
 app.get('/auth/tiktok/start', (req, res) => {
   const clientKey = process.env.TIKTOK_CLIENT_KEY;
-  const redirectUri = process.env.TIKTOK_REDIRECT_URI || `${req.protocol}://${req.get('host')}/auth/tiktok/callback`;
+  const redirectUri = process.env.TIKTOK_REDIRECT_URI || `${getBaseUrl(req)}/auth/tiktok/callback`;
   const scope = 'user.info.basic,video.publish';
   const state = randomUUID();
   
