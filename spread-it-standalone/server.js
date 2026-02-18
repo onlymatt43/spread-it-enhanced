@@ -3269,18 +3269,29 @@ app.get('/auth/facebook/callback', async (req, res) => {
 
     res.send(`
       <html>
-        <head><style>body{font-family:Arial;display:flex;align-items:center;justify-content:center;height:100vh;background:#10b981;color:white;text-align:center;}</style></head>
+        <head><style>
+          body{font-family:Arial;padding:20px;background:#10b981;color:white;}
+          .token-box{background:rgba(0,0,0,0.2);padding:15px;border-radius:8px;word-break:break-all;margin:20px 0;font-family:monospace;font-size:12px;}
+          button{background:white;color:#10b981;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;font-size:16px;}
+        </style></head>
         <body>
-          <div>
-            <h1 style="font-size:48px;margin:0;">✅</h1>
-            <h2>Facebook & Instagram connectés!</h2>
-            <p>Cette fenêtre va se fermer automatiquement...</p>
-          </div>
+          <h1>✅ Token Facebook/Instagram reçu!</h1>
+          <p><strong>COPIE ce token et ajoute-le dans Render Environment Variables:</strong></p>
+          <div class="token-box" id="token">${pageToken}</div>
+          <button onclick="navigator.clipboard.writeText('${pageToken}').then(() => alert('Token copié!'))">📋 Copier le token</button>
+          <hr style="margin:30px 0;">
+          <h3>Étapes suivantes:</h3>
+          <ol style="text-align:left;max-width:600px;">
+            <li>Va sur <strong>Render Dashboard → Environment</strong></li>
+            <li>Ajoute <code>FACEBOOK_ACCESS_TOKEN</code> = ce token</li>
+            <li>Ajoute <code>INSTAGRAM_ACCESS_TOKEN</code> = ce token</li>
+            <li>Clique <strong>Save Changes</strong></li>
+            <li>Render va redémarrer (~1-2 min)</li>
+          </ol>
           <script>
             if (window.opener) {
               window.opener.postMessage({ type: 'oauth-success', platform: 'facebook' }, '*');
             }
-            setTimeout(() => window.close(), 2000);
           </script>
         </body>
       </html>
