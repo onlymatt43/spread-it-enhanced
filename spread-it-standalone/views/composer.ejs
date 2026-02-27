@@ -510,11 +510,18 @@
     // Expose Share Trigger Globally
     window.SpreadIt = window.SpreadIt || {};
     window.SpreadIt.triggerShare = function(btn, platform) {
-        const card = btn.closest('.mini-card') || btn.closest('.mockup-card') || btn.closest('.platform-wrapper');
-        const textElement = card ? (card.querySelector('.sp-text-preview') || card.querySelector('.platform-caption') || card.querySelector('textarea') || card.querySelector('[contenteditable]')) : null;
+        // Remonte jusqu'au article[data-platform] — le plus robuste
+        const card = btn.closest('[data-platform]') || btn.closest('.mockup-card') || btn.closest('article');
+        if (!card) {
+            console.error('[SpreadIt] card introuvable pour le bouton', btn);
+            alert('Erreur interne : impossible de trouver la carte.');
+            return;
+        }
+        // Le texte est dans .post-text (contenteditable) sur toutes les cartes
+        const textElement = card.querySelector('.post-text') || card.querySelector('.sp-text-preview') || card.querySelector('[contenteditable]');
         const content = textElement ? (textElement.value || textElement.innerText || '').trim() : '';
         
-        if (!content || content === '...') {
+        if (!content || content.startsWith('En attente') || content === '...') {
             alert('Veuillez d\'abord générer du contenu avec l\'IA.');
             return;
         }
