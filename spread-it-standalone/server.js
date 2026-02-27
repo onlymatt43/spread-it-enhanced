@@ -488,21 +488,29 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
         // 1. Download the media temporarily so we can upload it
         // (Note: Many APIs require a local file stream or binary buffer, 
         // passing a raw URL often fails if the platform needs to re-host it)
-        console.log("⬇️  Downloading media...");
-        const response = await axios({
-            method: 'GET',
-            url: mediaUrl,
-            responseType: 'stream'
-        });
-
-        const w = fs.createWriteStream(tempFilePath);
-        response.data.pipe(w);
-
-        await new Promise((resolve, reject) => {
-            w.on('finish', resolve);
-            w.on('error', reject);
-        });
-        console.log("✅ Download complete:", tempFilePath);
+        if (mediaUrl) {
+            try {
+                console.log("⬇️  Downloading media...");
+                const response = await axios({
+                    method: 'GET',
+                    url: mediaUrl,
+                    responseType: 'stream',
+                    timeout: 15000
+                });
+                const w = fs.createWriteStream(tempFilePath);
+                response.data.pipe(w);
+                await new Promise((resolve, reject) => {
+                    w.on('finish', resolve);
+                    w.on('error', reject);
+                });
+                console.log("✅ Download complete:", tempFilePath);
+            } catch (dlErr) {
+                console.warn("⚠️  Media download failed, will use URL fallback:", dlErr.message);
+                tempFilePath = null; // force URL fallback in platform handlers
+            }
+        } else {
+            tempFilePath = null;
+        }
 
         // VÉRIFICATION GLOBALE ANTI-DETECTION
         if (platforms.length > 2) {
@@ -510,12 +518,7 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
             console.log(`💡 RECOMMENDATION: Consider posting to 1-2 platforms max per submission`);
         }
 
-        // VÉRIFICATION DE FRÉQUENCE GLOBALE: Max 5 posts par heure au total
-        const allRecentPosts = await strategist.getAllRecentPosts(60 * 60 * 1000); // Dernière heure
-        if (allRecentPosts.length + platforms.length > 5) {
-            console.log(`🚨 RATE LIMIT WARNING: ${allRecentPosts.length} posts in last hour + ${platforms.length} new = ${allRecentPosts.length + platforms.length} total`);
-            console.log(`⏳ Facebook may block automation. Consider waiting before posting more.`);
-        }
+        // VÉRIFICATION DE FRÉQUENCE GLOBALE: skipped (DB not required)
 
         // --- ANTI-DETECTION MEASURES ---
         const postingDelays = {
@@ -538,16 +541,6 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
              }
              delayCounter++;
 
-             // VÉRIFICATION DE FRÉQUENCE: Pas plus de 3 posts par heure
-             const recentPosts = await strategist.getRecentPosts(platform, 60 * 60 * 1000); // Dernière heure
-             if (recentPosts.length >= 3) {
-                 console.log(`⚠️  Rate limit: Too many posts to ${platform} in the last hour (${recentPosts.length})`);
-                 return {
-                     success: false,
-                     platform,
-                     error: `Rate limit exceeded: ${recentPosts.length} posts in last hour. Facebook blocks automation.`
-                 };
-             }
 
              // FORMATAGE SPÉCIFIQUE PAR PLATEFORME (caption + hashtags)
              const fmt = formatForPlatform(platform, caption, hashtags);
