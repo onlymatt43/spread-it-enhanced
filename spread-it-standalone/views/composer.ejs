@@ -510,9 +510,9 @@
     // Expose Share Trigger Globally
     window.SpreadIt = window.SpreadIt || {};
     window.SpreadIt.triggerShare = function(btn, platform) {
-        const card = btn.closest('.mini-card');
-        const textElement = card.querySelector('.sp-text-preview');
-        const content = textElement ? textElement.innerText : '';
+        const card = btn.closest('.mini-card') || btn.closest('.mockup-card') || btn.closest('.platform-wrapper');
+        const textElement = card ? (card.querySelector('.sp-text-preview') || card.querySelector('.platform-caption') || card.querySelector('textarea') || card.querySelector('[contenteditable]')) : null;
+        const content = textElement ? (textElement.value || textElement.innerText || '').trim() : '';
         
         if (!content || content === '...') {
             alert('Veuillez d\'abord générer du contenu avec l\'IA.');
