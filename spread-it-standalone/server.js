@@ -58,7 +58,9 @@ const googleTrends = require('google-trends-api');
 
 const app = express();
 
-// CORS configuration - allow requests from chaud-devant and production
+// Trust Render's reverse proxy (required for secure cookies + correct protocol detection)
+app.set('trust proxy', 1);
+ - allow requests from chaud-devant and production
 const allowedOrigins = [
   'http://localhost:8080',
   'http://127.0.0.1:8080',
@@ -418,10 +420,11 @@ const ALLOWED_EMAIL = process.env.ALLOWED_EMAIL; // ton Gmail dans Render
 const googleAuthEnabled = !!(process.env.GOOGLE_AUTH_CLIENT_ID && process.env.GOOGLE_AUTH_CLIENT_SECRET);
 
 if (googleAuthEnabled) {
+  const googleCallbackURL = (process.env.APP_BASE_URL || 'https://spread-it-enhanced.onrender.com') + '/auth/google/callback';
   passport.use(new GoogleStrategy({
     clientID:     process.env.GOOGLE_AUTH_CLIENT_ID,
     clientSecret: process.env.GOOGLE_AUTH_CLIENT_SECRET,
-    callbackURL:  `${process.env.APP_BASE_URL || ''}/auth/google/callback`
+    callbackURL:  googleCallbackURL
   }, (accessToken, refreshToken, profile, done) => {
     const email = profile.emails && profile.emails[0] && profile.emails[0].value;
     if (ALLOWED_EMAIL && email !== ALLOWED_EMAIL) {
