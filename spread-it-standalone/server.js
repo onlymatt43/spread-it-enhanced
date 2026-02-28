@@ -572,7 +572,7 @@ app.get('/auth/google/start',
     if (req.query.popup === '1') req.session.googlePopup = true;
     next();
   },
-  passport.authenticate('google', { scope: ['email', 'profile'] })
+  passport.authenticate('google', { scope: ['email', 'profile'], state: true })
 );
 
 app.get('/auth/google/callback',
