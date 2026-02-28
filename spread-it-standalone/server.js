@@ -681,23 +681,21 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
                      return { success: true, platform, id: fbResponse.data.id };
                  } 
                  
-                 // Fallback pour vidéo (plus complexe en binaire) ou si pas de fichier local
+                // Fallback : tempFilePath null = download échoué (403/protégé), poster texte seul
                  else {
-                     let fbEndpoint = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
-                     let payload = {
+                     // Si le download a échoué, on ne peut pas non plus passer l'URL à Facebook
+                     // (elle est protégée). On publie texte seul.
+                     const fbEndpoint = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
+                     const payload = {
                         access_token: fbToken,
-                        message: platformCaption + '\n\n' + platformHashtags
+                        message: platformCaption + (platformHashtags ? '\n\n' + platformHashtags : '')
                      };
-
-                     if (mediaType === 'image') {
-                         fbEndpoint = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/photos`;
-                         payload.url = mediaUrl; 
-                     } else if (mediaType === 'video') {
-                         payload.link = mediaUrl; 
+                     // Tenter d'inclure l'URL media si ce n'est pas une image protégée
+                     if (mediaUrl && mediaType === 'video') {
+                         payload.link = mediaUrl;
                      }
-
                      const response = await axios.post(fbEndpoint, payload);
-                     return { success: true, platform, id: response.data.id };
+                     return { success: true, platform, id: response.data.id, note: 'text-only (media inaccessible)' };
                  }
              }
 
