@@ -3395,24 +3395,36 @@ app.get('/auth/linkedin/callback', async (req, res) => {
 
     const personUrn = `urn:li:person:${meResponse.data.id}`;
 
-    // Update .env.local
+    // Update .env.local (local dev only — sur Render, copier manuellement)
     updateEnvFile('LINKEDIN_ACCESS_TOKEN', accessToken);
     updateEnvFile('LINKEDIN_PERSON_URN', personUrn);
 
     res.send(`
       <html>
-        <head><style>body{font-family:Arial;display:flex;align-items:center;justify-content:center;height:100vh;background:#0A66C2;color:white;text-align:center;}</style></head>
+        <head><style>
+          body{font-family:Arial;padding:20px;background:#0A66C2;color:white;}
+          .token-box{background:rgba(0,0,0,0.3);padding:15px;border-radius:8px;word-break:break-all;margin:10px 0;font-family:monospace;font-size:12px;}
+          button{background:white;color:#0A66C2;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-size:14px;margin-top:6px;}
+          ol{text-align:left;max-width:600px;}
+        </style></head>
         <body>
-          <div>
-            <h1 style="font-size:48px;margin:0;">✅</h1>
-            <h2>LinkedIn connecté!</h2>
-            <p>Token valide pour 60 jours</p>
-          </div>
+          <h1>✅ LinkedIn connecté!</h1>
+          <p><strong>COPIE ces valeurs dans Render Environment Variables :</strong></p>
+          <p>LINKEDIN_ACCESS_TOKEN</p>
+          <div class="token-box">${accessToken}</div>
+          <button onclick="navigator.clipboard.writeText('${accessToken}').then(() => alert('Token copié!'))">📋 Copier</button>
+          <p>LINKEDIN_PERSON_URN</p>
+          <div class="token-box">${personUrn}</div>
+          <button onclick="navigator.clipboard.writeText('${personUrn}').then(() => alert('URN copié!'))">📋 Copier</button>
+          <ol>
+            <li>Render Dashboard → Environment</li>
+            <li>Ajoute les 2 variables ci-dessus</li>
+            <li>Save Changes → Render redémarre</li>
+          </ol>
           <script>
             if (window.opener) {
               window.opener.postMessage({ type: 'oauth-success', platform: 'linkedin' }, '*');
             }
-            setTimeout(() => window.close(), 2000);
           </script>
         </body>
       </html>
@@ -3492,26 +3504,34 @@ app.get('/auth/youtube/callback', async (req, res) => {
     const refreshToken = tokens.refresh_token;
 
     if (!refreshToken) {
-      throw new Error('No refresh token received. Try revoking app access and reconnecting.');
+      throw new Error('No refresh token received. Try revoking app access at myaccount.google.com/permissions and reconnecting.');
     }
 
-    // Update .env.local
+    // Update .env.local (local dev only — sur Render, copier manuellement dans Environment Variables)
     updateEnvFile('YOUTUBE_REFRESH_TOKEN', refreshToken);
 
     res.send(`
       <html>
-        <head><style>body{font-family:Arial;display:flex;align-items:center;justify-content:center;height:100vh;background:#FF0000;color:white;text-align:center;}</style></head>
+        <head><style>
+          body{font-family:Arial;padding:20px;background:#FF0000;color:white;}
+          .token-box{background:rgba(0,0,0,0.3);padding:15px;border-radius:8px;word-break:break-all;margin:20px 0;font-family:monospace;font-size:12px;}
+          button{background:white;color:#FF0000;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;font-size:16px;margin-top:10px;}
+          ol{text-align:left;max-width:600px;}
+        </style></head>
         <body>
-          <div>
-            <h1 style="font-size:48px;margin:0;">✅</h1>
-            <h2>YouTube connecté!</h2>
-            <p>Refresh token sauvegardé</p>
-          </div>
+          <h1>✅ YouTube connecté!</h1>
+          <p><strong>COPIE ce refresh token et ajoute-le dans Render Environment Variables :</strong></p>
+          <div class="token-box" id="token">${refreshToken}</div>
+          <button onclick="navigator.clipboard.writeText('${refreshToken}').then(() => alert('Token copié!'))">📋 Copier le token</button>
+          <ol>
+            <li>Va sur <strong>Render Dashboard → Environment</strong></li>
+            <li>Ajoute <code>YOUTUBE_REFRESH_TOKEN</code> = ce token</li>
+            <li>Clique <strong>Save Changes</strong> → Render redémarre</li>
+          </ol>
           <script>
             if (window.opener) {
               window.opener.postMessage({ type: 'oauth-success', platform: 'youtube' }, '*');
             }
-            setTimeout(() => window.close(), 2000);
           </script>
         </body>
       </html>
@@ -3587,7 +3607,7 @@ app.get('/auth/tiktok/callback', async (req, res) => {
     const accessToken = tokenResponse.data.access_token;
     const refreshToken = tokenResponse.data.refresh_token;
 
-    // Update .env.local
+    // Update .env.local (local dev only — sur Render, copier manuellement)
     updateEnvFile('TIKTOK_ACCESS_TOKEN', accessToken);
     if (refreshToken) {
       updateEnvFile('TIKTOK_REFRESH_TOKEN', refreshToken);
@@ -3595,18 +3615,32 @@ app.get('/auth/tiktok/callback', async (req, res) => {
 
     res.send(`
       <html>
-        <head><style>body{font-family:Arial;display:flex;align-items:center;justify-content:center;height:100vh;background:#000000;color:white;text-align:center;}</style></head>
+        <head><style>
+          body{font-family:Arial;padding:20px;background:#000000;color:white;}
+          .token-box{background:rgba(255,255,255,0.1);padding:15px;border-radius:8px;word-break:break-all;margin:10px 0;font-family:monospace;font-size:12px;}
+          button{background:white;color:#000;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-size:14px;margin-top:6px;}
+          ol{text-align:left;max-width:600px;}
+        </style></head>
         <body>
-          <div>
-            <h1 style="font-size:48px;margin:0;">✅</h1>
-            <h2>TikTok connecté!</h2>
-            <p>Access token sauvegardé</p>
-          </div>
+          <h1>✅ TikTok connecté!</h1>
+          <p><strong>COPIE ces valeurs dans Render Environment Variables :</strong></p>
+          <p>TIKTOK_ACCESS_TOKEN</p>
+          <div class="token-box">${accessToken}</div>
+          <button onclick="navigator.clipboard.writeText('${accessToken}').then(() => alert('Token copié!'))">📋 Copier</button>
+          ${refreshToken ? `
+          <p>TIKTOK_REFRESH_TOKEN</p>
+          <div class="token-box">${refreshToken}</div>
+          <button onclick="navigator.clipboard.writeText('${refreshToken}').then(() => alert('Refresh token copié!'))">📋 Copier</button>
+          ` : ''}
+          <ol>
+            <li>Render Dashboard → Environment</li>
+            <li>Ajoute les variables ci-dessus</li>
+            <li>Save Changes → Render redémarre</li>
+          </ol>
           <script>
             if (window.opener) {
               window.opener.postMessage({ type: 'oauth-success', platform: 'tiktok' }, '*');
             }
-            setTimeout(() => window.close(), 2000);
           </script>
         </body>
       </html>
