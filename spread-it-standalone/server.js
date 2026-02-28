@@ -1449,14 +1449,14 @@ app.get('/api/platforms/status', async (req, res) => {
     // LINKEDIN
     try {
       if (process.env.LINKEDIN_ACCESS_TOKEN && process.env.LINKEDIN_ACCESS_TOKEN !== 'dummy') {
-        const liResponse = await axios.get('https://api.linkedin.com/v2/me', {
+        const liResponse = await axios.get('https://api.linkedin.com/v2/userinfo', {
           headers: { 'Authorization': `Bearer ${process.env.LINKEDIN_ACCESS_TOKEN}` },
           timeout: 5000
         });
         status.linkedin = { 
           connected: true, 
-          name: `${liResponse.data.localizedFirstName} ${liResponse.data.localizedLastName}`,
-          personId: liResponse.data.id 
+          name: liResponse.data.name || `${liResponse.data.given_name || ''} ${liResponse.data.family_name || ''}`.trim(),
+          personId: liResponse.data.sub 
         };
       } else {
         status.linkedin = { connected: false, reason: 'Missing credentials' };
@@ -3343,7 +3343,7 @@ app.get('/auth/facebook/callback', async (req, res) => {
 app.get('/auth/linkedin/start', (req, res) => {
   const clientId = process.env.LINKEDIN_CLIENT_ID;
   const redirectUri = `${getBaseUrl(req)}/auth/linkedin/callback`;
-  const scope = 'w_member_social r_basicprofile';
+  const scope = 'w_member_social profile email openid';
   const state = randomUUID();
   
   req.session.linkedinState = state;
@@ -3387,13 +3387,13 @@ app.get('/auth/linkedin/callback', async (req, res) => {
     const accessToken = tokenResponse.data.access_token;
 
     // Get Person URN automatically
-    const meResponse = await axios.get('https://api.linkedin.com/v2/me', {
+    const meResponse = await axios.get('https://api.linkedin.com/v2/userinfo', {
       headers: {
         'Authorization': `Bearer ${accessToken}`
       }
     });
 
-    const personUrn = `urn:li:person:${meResponse.data.id}`;
+    const personUrn = `urn:li:person:${meResponse.data.sub}`;
 
     // Update .env.local (local dev only — sur Render, copier manuellement)
     updateEnvFile('LINKEDIN_ACCESS_TOKEN', accessToken);
