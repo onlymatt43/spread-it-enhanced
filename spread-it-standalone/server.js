@@ -1439,8 +1439,8 @@ app.post('/api/create-spread', express.json(), async (req, res) => {
   }
 });
 
-// NEW: Check Platform Connection Status
-app.get('/api/platforms/status', requireAuth, async (req, res) => {
+// NEW: Check Platform Connection Status (public — only shows connected/disconnected booleans)
+app.get('/api/platforms/status', async (req, res) => {
   try {
     const status = {};
 
