@@ -415,17 +415,23 @@ app.use(session({
 // ── GOOGLE AUTH (passport) ──────────────────────────────────────────
 const ALLOWED_EMAIL = process.env.ALLOWED_EMAIL; // ton Gmail dans Render
 
-passport.use(new GoogleStrategy({
-  clientID:     process.env.GOOGLE_AUTH_CLIENT_ID,
-  clientSecret: process.env.GOOGLE_AUTH_CLIENT_SECRET,
-  callbackURL:  `${process.env.APP_BASE_URL || ''}/auth/google/callback`
-}, (accessToken, refreshToken, profile, done) => {
-  const email = profile.emails && profile.emails[0] && profile.emails[0].value;
-  if (ALLOWED_EMAIL && email !== ALLOWED_EMAIL) {
-    return done(null, false, { message: 'Email non autorisé' });
-  }
-  return done(null, { id: profile.id, email, name: profile.displayName, photo: profile.photos?.[0]?.value });
-}));
+const googleAuthEnabled = !!(process.env.GOOGLE_AUTH_CLIENT_ID && process.env.GOOGLE_AUTH_CLIENT_SECRET);
+
+if (googleAuthEnabled) {
+  passport.use(new GoogleStrategy({
+    clientID:     process.env.GOOGLE_AUTH_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_AUTH_CLIENT_SECRET,
+    callbackURL:  `${process.env.APP_BASE_URL || ''}/auth/google/callback`
+  }, (accessToken, refreshToken, profile, done) => {
+    const email = profile.emails && profile.emails[0] && profile.emails[0].value;
+    if (ALLOWED_EMAIL && email !== ALLOWED_EMAIL) {
+      return done(null, false, { message: 'Email non autorisé' });
+    }
+    return done(null, { id: profile.id, email, name: profile.displayName, photo: profile.photos?.[0]?.value });
+  }));
+} else {
+  console.warn('⚠️  Google Auth disabled — GOOGLE_AUTH_CLIENT_ID or GOOGLE_AUTH_CLIENT_SECRET not set');
+}
 
 passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((user, done) => done(null, user));
@@ -435,6 +441,8 @@ app.use(passport.session());
 
 // Middleware : protège les routes privées
 const requireAuth = (req, res, next) => {
+  // Si Google Auth pas configuré, bypass (app ouverte jusqu'à config)
+  if (!googleAuthEnabled) return next();
   if (req.isAuthenticated()) return next();
   // API calls → JSON error
   if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Non authentifié' });
@@ -450,10 +458,18 @@ app.get('/login', (req, res) => {
 });
 
 app.get('/auth/google/start',
+  (req, res, next) => {
+    if (!googleAuthEnabled) return res.redirect('/login?error=Google+Auth+non+configuré');
+    next();
+  },
   passport.authenticate('google', { scope: ['email', 'profile'] })
 );
 
 app.get('/auth/google/callback',
+  (req, res, next) => {
+    if (!googleAuthEnabled) return res.redirect('/');
+    next();
+  },
   passport.authenticate('google', { failureRedirect: '/login?error=Email+non+autorisé' }),
   (req, res) => {
     const returnTo = req.session.returnTo || '/';
