@@ -487,6 +487,36 @@ app.get('/api/auth/check', (req, res) => {
   res.json({ authenticated: req.isAuthenticated() || !googleAuthEnabled });
 });
 
+// Multer instance for direct media uploads (higher limit, serves from public/uploads/)
+const mediaUploadStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, 'public', 'uploads');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + '_' + Math.random().toString(36).slice(2) + path.extname(file.originalname));
+  }
+});
+const mediaUpload = multer({
+  storage: mediaUploadStorage,
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500 MB
+  fileFilter: (req, file, cb) => {
+    const ok = /jpeg|jpg|png|gif|webp|mp4|mov|avi|webm|mkv/i.test(path.extname(file.originalname));
+    ok ? cb(null, true) : cb(new Error('Format non supporté'));
+  }
+});
+
+// Upload a media file directly from the user's device → returns public URL
+app.post('/api/upload-media', mediaUpload.single('media'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Aucun fichier reçu' });
+  const baseUrl = process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || 'http://localhost:3000';
+  const url = `${baseUrl}/uploads/${req.file.filename}`;
+  const ext = path.extname(req.file.originalname).toLowerCase();
+  const type = /mp4|mov|avi|webm|mkv/.test(ext) ? 'video' : 'image';
+  res.json({ url, type, filename: req.file.filename });
+});
+
 // Issue a short-lived Bearer token — called from /auth/google/done after successful auth
 // Token is passed to the composer iframe URL to authenticate API calls cross-origin
 app.get('/api/auth/issue-token', (req, res) => {
@@ -1018,6 +1048,31 @@ app.post('/api/smart-share-submit', requireAuth, express.json(), async (req, res
                  }
 
                  // 3. With media → register upload → binary upload → create post
+                 // Requires a local file — if download failed, fall back to text-only
+                 if (!tempFilePath) {
+                     console.warn('[LinkedIn] No local file available, posting text-only');
+                     let postRes;
+                     try {
+                         postRes = await axios.post('https://api.linkedin.com/v2/ugcPosts', {
+                             author: personUrn,
+                             lifecycleState: 'PUBLISHED',
+                             specificContent: {
+                                 'com.linkedin.ugc.ShareContent': {
+                                     shareCommentary: { text: liCaption },
+                                     shareMediaCategory: 'NONE'
+                                 }
+                             },
+                             visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
+                         }, { headers: liHeaders });
+                     } catch (postErr) {
+                         const status = postErr.response?.status;
+                         if (status === 429) return { success: false, platform, error: 'LinkedIn rate limit — max ~3 posts/jour. Réessaie demain.' };
+                         if (status === 401 || status === 403) return { success: false, platform, error: 'LinkedIn token expiré — va dans /auth/setup pour reconnecter.' };
+                         throw postErr;
+                     }
+                     return { success: true, platform, id: postRes.data.id, note: 'text-only (media download failed)' };
+                 }
+
                  const mediaCategory = mediaType === 'video' ? 'VIDEO' : 'IMAGE';
                  const recipe = mediaType === 'video'
                      ? 'urn:li:digitalmediaRecipe:feedshare-video'
@@ -1092,6 +1147,9 @@ app.post('/api/smart-share-submit', requireAuth, express.json(), async (req, res
                  if (!process.env.YOUTUBE_REFRESH_TOKEN) {
                      return { success: false, platform, error: "Missing YOUTUBE_REFRESH_TOKEN" };
                  }
+                 if (!tempFilePath) {
+                     return { success: false, platform, error: "YouTube: impossible de télécharger la vidéo (URL inaccessible depuis Render)" };
+                 }
 
                  try {
                      // Convert string hashtags "#foo #bar" to array ["foo", "bar"]
@@ -1121,6 +1179,9 @@ app.post('/api/smart-share-submit', requireAuth, express.json(), async (req, res
                  }
                  if (!process.env.TIKTOK_ACCESS_TOKEN) {
                      return { success: false, platform, error: "Missing TIKTOK_ACCESS_TOKEN" };
+                 }
+                 if (!tempFilePath) {
+                     return { success: false, platform, error: "TikTok: impossible de télécharger la vidéo (URL inaccessible depuis Render)" };
                  }
 
                  try {

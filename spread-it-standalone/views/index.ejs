@@ -60,6 +60,142 @@
             background: rgba(255,255,255,0.1);
             backdrop-filter: blur(10px);
         }
+        /* ---- Upload panel ---- */
+        .upload-panel {
+            background: rgba(255,255,255,0.12);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255,255,255,0.25);
+            border-radius: 20px;
+            max-width: 620px;
+            margin: 0 auto;
+            padding: 2.5rem 2rem;
+            color: white;
+        }
+        .upload-tabs {
+            display: flex;
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            padding: 4px;
+            margin-bottom: 1.8rem;
+        }
+        .upload-tab {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: rgba(255,255,255,0.6);
+            padding: 10px 0;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all .2s;
+        }
+        .upload-tab.active {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+        .drop-zone {
+            border: 2px dashed rgba(255,255,255,0.4);
+            border-radius: 14px;
+            padding: 2.5rem 1rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all .2s;
+            position: relative;
+        }
+        .drop-zone:hover, .drop-zone.drag-over {
+            border-color: rgba(255,255,255,0.9);
+            background: rgba(255,255,255,0.08);
+        }
+        .drop-zone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+        }
+        .drop-zone .dz-icon { font-size: 2.5rem; margin-bottom: .6rem; }
+        .drop-zone .dz-label { font-size: 1.05rem; font-weight: 600; }
+        .drop-zone .dz-sub { font-size: 0.8rem; opacity: .65; margin-top: .3rem; }
+        .upload-progress {
+            display: none;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            overflow: hidden;
+            height: 8px;
+            margin-top: 1rem;
+        }
+        .upload-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #a78bfa, #60a5fa);
+            width: 0%;
+            transition: width .3s;
+        }
+        .selected-file-info {
+            display: none;
+            align-items: center;
+            gap: .6rem;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: .7rem 1rem;
+            margin-top: 1rem;
+            font-size: .9rem;
+        }
+        .url-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: .8rem;
+        }
+        .url-input-group input[type="text"] {
+            background: rgba(0,0,0,0.25);
+            border: 1px solid rgba(255,255,255,0.25);
+            border-radius: 10px;
+            color: white;
+            padding: 12px 16px;
+            font-size: 1rem;
+            outline: none;
+            transition: border .2s;
+        }
+        .url-input-group input[type="text"]::placeholder { color: rgba(255,255,255,0.4); }
+        .url-input-group input[type="text"]:focus { border-color: rgba(255,255,255,0.7); }
+        .media-type-row {
+            display: flex;
+            gap: .5rem;
+        }
+        .media-type-btn {
+            flex: 1;
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: rgba(255,255,255,0.65);
+            border-radius: 8px;
+            padding: 8px;
+            font-size: .85rem;
+            cursor: pointer;
+            transition: all .2s;
+        }
+        .media-type-btn.active {
+            background: rgba(255,255,255,0.2);
+            border-color: rgba(255,255,255,0.6);
+            color: white;
+        }
+        .btn-launch {
+            width: 100%;
+            background: white;
+            color: #764ba2;
+            border: none;
+            border-radius: 12px;
+            padding: 14px;
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-top: 1.4rem;
+            cursor: pointer;
+            transition: all .2s;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+        .btn-launch:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.25); }
+        .btn-launch:disabled { opacity: .5; cursor: default; transform: none; }
+        .error-msg { color: #fca5a5; font-size: .85rem; margin-top: .5rem; display: none; }
     </style>
     <!-- Composer assets (modal will load /composer) -->
     <link rel="stylesheet" href="/css/composer.css">
@@ -82,12 +218,58 @@
 
     <section class="hero-section">
         <div class="container">
-            <h1>Créez et Partagez avec l'IA</h1>
-            <p>Transformez votre contenu brut en publications optimisées et partagez-les automatiquement sur les réseaux sociaux aux moments parfaits.</p>
-            <a href="/composer" class="btn btn-primary btn-lg">
-                <i class="fas fa-magic me-2"></i>
-                Commencer Maintenant
-            </a>
+            <h1 style="font-size:2.6rem">Partagez partout en un clic</h1>
+            <p style="opacity:.85; max-width:480px; margin: 0 auto 2rem">Uploade un fichier ou colle une URL &mdash; l&apos;IA génère les textes, tu publies sur toutes tes plateformes.</p>
+
+            <div class="upload-panel">
+                <!-- Tabs -->
+                <div class="upload-tabs">
+                    <button class="upload-tab active" id="tabFile" onclick="switchTab('file')">
+                        <i class="fas fa-upload me-1"></i> Depuis l'ordi
+                    </button>
+                    <button class="upload-tab" id="tabUrl" onclick="switchTab('url')">
+                        <i class="fas fa-link me-1"></i> Via URL
+                    </button>
+                </div>
+
+                <!-- File upload tab -->
+                <div id="panelFile">
+                    <div class="drop-zone" id="dropZone">
+                        <input type="file" id="fileInput" accept="video/*,image/*">
+                        <div class="dz-icon">📁</div>
+                        <div class="dz-label">Glisse ton fichier ici</div>
+                        <div class="dz-sub">ou clique pour parcourir &bull; Vidéo ou image &bull; jusqu&apos;à 500 MB</div>
+                    </div>
+                    <div class="selected-file-info" id="fileInfo">
+                        <span id="fileInfoIcon">🎬</span>
+                        <span id="fileInfoName" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap"></span>
+                        <span id="fileInfoSize" style="opacity:.6; font-size:.8rem"></span>
+                    </div>
+                    <div class="upload-progress" id="uploadProgress">
+                        <div class="upload-progress-bar" id="uploadProgressBar"></div>
+                    </div>
+                    <div class="error-msg" id="fileError"></div>
+                    <button class="btn-launch" id="btnLaunchFile" disabled onclick="launchFromFile()">
+                        <i class="fas fa-magic me-2"></i>Ouvrir le composer
+                    </button>
+                </div>
+
+                <!-- URL tab -->
+                <div id="panelUrl" style="display:none">
+                    <div class="url-input-group">
+                        <input type="text" id="urlInput" placeholder="https://example.com/video.mp4" autocomplete="off" spellcheck="false">
+                        <div class="media-type-row">
+                            <button class="media-type-btn" id="typeAuto" onclick="selectType('auto')">🔍 Auto-detect</button>
+                            <button class="media-type-btn active" id="typeVideo" onclick="selectType('video')">🎬 Vidéo</button>
+                            <button class="media-type-btn" id="typeImage" onclick="selectType('image')">🖼️ Image</button>
+                        </div>
+                    </div>
+                    <div class="error-msg" id="urlError"></div>
+                    <button class="btn-launch" id="btnLaunchUrl" onclick="launchFromUrl()">
+                        <i class="fas fa-magic me-2"></i>Ouvrir le composer
+                    </button>
+                </div>
+            </div>
         </div>
     </section>
 
@@ -176,21 +358,146 @@
         </div>
 
         <script>
-            (function(){
-                function showComposer(url){
-                    var modal=document.getElementById('composerModal');
-                    var frame=document.getElementById('composerFrame');
-                    frame.src=url; modal.style.display='flex'; document.body.style.overflow='hidden';
+        // ── Composer modal ──────────────────────────────────────────────────
+        function showComposer(url) {
+            var modal = document.getElementById('composerModal');
+            var frame = document.getElementById('composerFrame');
+            frame.src = url;
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+        function hideComposer() {
+            var modal = document.getElementById('composerModal');
+            var frame = document.getElementById('composerFrame');
+            frame.src = '';
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+        document.getElementById('closeComposer').addEventListener('click', hideComposer);
+        window.SpreadIt = window.SpreadIt || {};
+        window.SpreadIt.openComposer = function(q) { showComposer('/composer' + (q ? ('?' + q) : '')); };
+
+        // ── Tab switch ───────────────────────────────────────────────────────
+        function switchTab(tab) {
+            document.getElementById('panelFile').style.display = tab === 'file' ? '' : 'none';
+            document.getElementById('panelUrl').style.display  = tab === 'url'  ? '' : 'none';
+            document.getElementById('tabFile').classList.toggle('active', tab === 'file');
+            document.getElementById('tabUrl').classList.toggle('active', tab === 'url');
+        }
+
+        // ── File upload tab ──────────────────────────────────────────────────
+        var selectedFile = null;
+
+        var dropZone = document.getElementById('dropZone');
+        ['dragenter','dragover'].forEach(function(e) {
+            dropZone.addEventListener(e, function(ev) { ev.preventDefault(); dropZone.classList.add('drag-over'); });
+        });
+        ['dragleave','drop'].forEach(function(e) {
+            dropZone.addEventListener(e, function(ev) { ev.preventDefault(); dropZone.classList.remove('drag-over'); });
+        });
+        dropZone.addEventListener('drop', function(ev) {
+            var files = ev.dataTransfer.files;
+            if (files.length) handleFile(files[0]);
+        });
+        document.getElementById('fileInput').addEventListener('change', function() {
+            if (this.files.length) handleFile(this.files[0]);
+        });
+
+        function handleFile(file) {
+            selectedFile = file;
+            var info = document.getElementById('fileInfo');
+            var isVideo = file.type.startsWith('video/');
+            document.getElementById('fileInfoIcon').textContent = isVideo ? '🎬' : '🖼️';
+            document.getElementById('fileInfoName').textContent = file.name;
+            document.getElementById('fileInfoSize').textContent = formatSize(file.size);
+            info.style.display = 'flex';
+            document.getElementById('fileError').style.display = 'none';
+            document.getElementById('btnLaunchFile').disabled = false;
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function launchFromFile() {
+            if (!selectedFile) return;
+            var btn = document.getElementById('btnLaunchFile');
+            var errEl = document.getElementById('fileError');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Upload en cours…';
+            errEl.style.display = 'none';
+
+            var progress = document.getElementById('uploadProgress');
+            var bar = document.getElementById('uploadProgressBar');
+            progress.style.display = 'block';
+
+            var formData = new FormData();
+            formData.append('media', selectedFile);
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/upload-media', true);
+            xhr.upload.onprogress = function(e) {
+                if (e.lengthComputable) bar.style.width = Math.round(e.loaded / e.total * 100) + '%';
+            };
+            xhr.onload = function() {
+                progress.style.display = 'none';
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-magic me-2"></i>Ouvrir le composer';
+                if (xhr.status === 200) {
+                    var data = JSON.parse(xhr.responseText);
+                    var param = data.type === 'video' ? 'video_url' : 'poster';
+                    showComposer('/composer?' + param + '=' + encodeURIComponent(data.url));
+                } else {
+                    var msg = 'Erreur upload';
+                    try { msg = JSON.parse(xhr.responseText).error || msg; } catch(e) {}
+                    errEl.textContent = msg;
+                    errEl.style.display = 'block';
                 }
-                function hideComposer(){
-                    var modal=document.getElementById('composerModal'); var frame=document.getElementById('composerFrame'); frame.src=''; modal.style.display='none'; document.body.style.overflow='';
-                }
-                document.getElementById('closeComposer').addEventListener('click',hideComposer);
-                var btn=document.querySelector('.btn-primary.btn-lg');
-                if(btn){ btn.addEventListener('click',function(e){ e.preventDefault(); showComposer('/composer'); }); }
-                // allow external opens via window
-                window.SpreadIt = window.SpreadIt||{}; window.SpreadIt.openComposer = function(q){ var url='/composer'+(q?('?'+q):''); showComposer(url); };
-            })();
+            };
+            xhr.onerror = function() {
+                progress.style.display = 'none';
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-magic me-2"></i>Ouvrir le composer';
+                errEl.textContent = 'Erreur réseau — réessaie.';
+                errEl.style.display = 'block';
+            };
+            xhr.send(formData);
+        }
+
+        // ── URL tab ──────────────────────────────────────────────────────────
+        var selectedType = 'video';
+
+        function selectType(t) {
+            selectedType = t;
+            ['auto','video','image'].forEach(function(id) {
+                document.getElementById('type' + id.charAt(0).toUpperCase() + id.slice(1))
+                    .classList.toggle('active', id === t);
+            });
+        }
+        // Default: video selected
+        selectType('video');
+
+        function launchFromUrl() {
+            var url = document.getElementById('urlInput').value.trim();
+            var errEl = document.getElementById('urlError');
+            errEl.style.display = 'none';
+            if (!url) { errEl.textContent = 'Colle une URL d\'abord.'; errEl.style.display = 'block'; return; }
+            try { new URL(url); } catch(e) { errEl.textContent = 'URL invalide.'; errEl.style.display = 'block'; return; }
+
+            var type = selectedType;
+            if (type === 'auto') {
+                var ext = url.split('?')[0].split('.').pop().toLowerCase();
+                type = /mp4|mov|avi|webm|mkv/.test(ext) ? 'video' : 'image';
+            }
+            var param = type === 'video' ? 'video_url' : 'poster';
+            showComposer('/composer?' + param + '=' + encodeURIComponent(url));
+        }
+
+        // Allow Enter key in URL input
+        document.getElementById('urlInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') launchFromUrl();
+        });
         </script>
 </body>
 </html>
