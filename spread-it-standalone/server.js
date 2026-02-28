@@ -1397,20 +1397,21 @@ app.get('/api/platforms/status', async (req, res) => {
     // INSTAGRAM
     try {
       if (process.env.INSTAGRAM_ACCESS_TOKEN && process.env.INSTAGRAM_BUSINESS_ID) {
+        // Instagram Business API utilise graph.facebook.com (pas graph.instagram.com)
         const igResponse = await axios.get(
-          `https://graph.instagram.com/${process.env.INSTAGRAM_BUSINESS_ID}`,
+          `https://graph.facebook.com/v18.0/${process.env.INSTAGRAM_BUSINESS_ID}`,
           {
-            params: { access_token: process.env.INSTAGRAM_ACCESS_TOKEN, fields: 'id,username' },
+            params: { access_token: process.env.INSTAGRAM_ACCESS_TOKEN, fields: 'id,username,name' },
             timeout: 5000
           }
         );
         status.instagram = { 
           connected: true, 
-          username: igResponse.data.username,
+          username: igResponse.data.username || igResponse.data.name,
           accountId: igResponse.data.id 
         };
       } else {
-        status.instagram = { connected: false, reason: 'Missing credentials' };
+        status.instagram = { connected: false, reason: 'Missing INSTAGRAM_BUSINESS_ID' };
       }
     } catch (error) {
       status.instagram = { 
