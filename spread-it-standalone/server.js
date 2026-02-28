@@ -2530,7 +2530,7 @@ app.post('/api/chat', express.json(), async (req, res) => {
             throw new Error("Erreur de format de réponse AI (JSON invalide).");
         }
 
-        res.json(result);
+        res.json({ ...result, mediaUsed: selectedMedia });
 
     } catch (e) {
         console.error('🔴 Chat API Error:', e.message);
