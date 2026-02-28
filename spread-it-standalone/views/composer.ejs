@@ -578,10 +578,10 @@
     const sendBtn = document.getElementById('sendMessage');
     if(sendBtn) sendBtn.addEventListener('click', () => handleSend());
 
-    // Proxy CDN media through Render to bypass CORS (preview only — original URL still published)
-    function proxyUrl(url) {
-      if (!url) return url;
-      // Only proxy Bunny CDN URLs to avoid unnecessary proxying
+    // Proxy CDN video through Render to bypass CORS (preview only — original URL still published)
+    // Images don't need proxying — only <video> triggers CORS issues
+    function proxyUrl(url, type) {
+      if (!url || type !== 'video') return url;
       if (url.includes('b-cdn.net') || url.includes('bunnycdn.com')) {
         return '/api/media-proxy?url=' + encodeURIComponent(url);
       }
@@ -628,7 +628,7 @@
             const thumbToShow = window.CURRENT_POSTER || (window.CURRENT_VIDEO_URL && !window.CURRENT_VIDEO_URL.endsWith('.mp4') ? window.CURRENT_VIDEO_URL : null);
             
             if(thumbToShow) {
-                visualHtml += `<br><img src="${proxyUrl(thumbToShow)}" style="max-width:120px; border-radius:8px; margin-top:8px; display:block; border:1px solid #333;" alt="Aperçu">`;
+                visualHtml += `<br><img src="${thumbToShow}" style="max-width:120px; border-radius:8px; margin-top:8px; display:block; border:1px solid #333;" alt="Aperçu">`;
             }
             
             if(window.CURRENT_VIDEO_URL) visualHtml += `<div style="font-size:0.8em; color:#4ade80; margin-top:4px">✓ Vidéo chargée</div>`;
