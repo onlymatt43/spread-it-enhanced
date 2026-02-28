@@ -1572,7 +1572,7 @@ app.get('/create', requireAuth, (req, res) => {
 });
 
 // New composer UI (Standalone) - stack cards + AI chat popup
-app.get('/composer', requireAuth, (req, res) => {
+app.get('/composer', (req, res) => {
   const configured = {
       linkedin: !!(process.env.LINKEDIN_ACCESS_TOKEN || (req.session.tokens && req.session.tokens.linkedin)),
       facebook: !!(process.env.FACEBOOK_ACCESS_TOKEN || (req.session.tokens && req.session.tokens.facebook)),
