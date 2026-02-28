@@ -28,6 +28,19 @@ CREATE TABLE IF NOT EXISTS metrics (
   FOREIGN KEY(share_id) REFERENCES shares(id)
 );
 
+-- Spreads — main publishing records
+CREATE TABLE IF NOT EXISTS spreads (
+  id TEXT PRIMARY KEY,
+  media_url TEXT,
+  media_type TEXT,
+  ai_suggestion TEXT,
+  user_text TEXT,
+  platforms TEXT,
+  content TEXT,
+  metadata TEXT,
+  created_at INTEGER
+);
+
 -- Resources table for external references (used by Turso libSQL insert)
 CREATE TABLE IF NOT EXISTS resources (
   id TEXT PRIMARY KEY,
