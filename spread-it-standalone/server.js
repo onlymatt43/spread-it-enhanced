@@ -494,12 +494,20 @@ app.get('/auth/google/callback',
 
 // Popup close page — signals parent window and closes itself
 app.get('/auth/google/done', (req, res) => {
-  res.send(`<!DOCTYPE html><html><head><title>Connected</title></head><body>
+  res.send(`<!DOCTYPE html><html><head><title>Connected</title>
+  <style>
+    body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #1a1a2e; color: #fff; gap: 16px; }
+    button { padding: 10px 24px; background: #7c3aed; color: #fff; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; }
+  </style>
+  </head><body>
+  <p>✅ Connexion réussie.</p>
+  <button onclick="window.close()">Fermer cette fenêtre</button>
   <script>
-    try { window.opener.postMessage('spread-it-auth-done', '*'); } catch(e) {}
-    window.close();
+    if (window.opener) {
+      try { window.opener.postMessage('spread-it-auth-done', '*'); } catch(e) {}
+    }
+    setTimeout(function() { window.close(); }, 800);
   <\/script>
-  <p>Connexion réussie, fermeture...</p>
   </body></html>`);
 });
 
