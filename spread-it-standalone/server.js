@@ -60,7 +60,8 @@ const app = express();
 
 // Trust Render's reverse proxy (required for secure cookies + correct protocol detection)
 app.set('trust proxy', 1);
- - allow requests from chaud-devant and production
+
+// CORS configuration - allow requests from chaud-devant and production
 const allowedOrigins = [
   'http://localhost:8080',
   'http://127.0.0.1:8080',
