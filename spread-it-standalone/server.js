@@ -490,13 +490,24 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
         // passing a raw URL often fails if the platform needs to re-host it)
         if (mediaUrl) {
             try {
-                console.log("⬇️  Downloading media...");
+                console.log("⬇️  Downloading media:", mediaUrl);
+                // Extraire le domaine source pour le Referer (bypass hotlink protection)
+                const mediaOrigin = mediaUrl ? new URL(mediaUrl).origin : '';
                 const response = await axios({
                     method: 'GET',
                     url: mediaUrl,
                     responseType: 'stream',
-                    timeout: 15000
+                    timeout: 20000,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (compatible; SpreadItBot/1.0)',
+                        'Referer': mediaOrigin,
+                        'Origin': mediaOrigin,
+                        'Accept': 'image/*,video/*,*/*'
+                    }
                 });
+                if (response.status === 403 || response.status === 401) {
+                    throw new Error(`HTTP ${response.status} — média inaccessible depuis Render`);
+                }
                 const w = fs.createWriteStream(tempFilePath);
                 response.data.pipe(w);
                 await new Promise((resolve, reject) => {
@@ -506,7 +517,7 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
                 console.log("✅ Download complete:", tempFilePath);
             } catch (dlErr) {
                 console.warn("⚠️  Media download failed, will use URL fallback:", dlErr.message);
-                tempFilePath = null; // force URL fallback in platform handlers
+                tempFilePath = null;
             }
         } else {
             tempFilePath = null;
@@ -681,21 +692,35 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
                      return { success: true, platform, id: fbResponse.data.id };
                  } 
                  
-                // Fallback : tempFilePath null = download échoué (403/protégé), poster texte seul
+                // Fallback : tempFilePath null — tenter URL directe (Facebook fetche lui-même)
                  else {
-                     // Si le download a échoué, on ne peut pas non plus passer l'URL à Facebook
-                     // (elle est protégée). On publie texte seul.
-                     const fbEndpoint = `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`;
+                     if (mediaUrl && mediaType === 'image') {
+                         // Tenter /photos avec URL directe
+                         try {
+                             const fbResp = await axios.post(
+                                 `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/photos`,
+                                 {
+                                     access_token: fbToken,
+                                     message: platformCaption + (platformHashtags ? '\n\n' + platformHashtags : ''),
+                                     url: mediaUrl
+                                 }
+                             );
+                             return { success: true, platform, id: fbResp.data.id };
+                         } catch (photoErr) {
+                             console.warn('⚠️  Facebook /photos URL fallback failed:', photoErr.message, '— posting text only');
+                         }
+                     }
+                     // Texte seul en dernier recours
                      const payload = {
                         access_token: fbToken,
                         message: platformCaption + (platformHashtags ? '\n\n' + platformHashtags : '')
                      };
-                     // Tenter d'inclure l'URL media si ce n'est pas une image protégée
-                     if (mediaUrl && mediaType === 'video') {
-                         payload.link = mediaUrl;
-                     }
-                     const response = await axios.post(fbEndpoint, payload);
-                     return { success: true, platform, id: response.data.id, note: 'text-only (media inaccessible)' };
+                     if (mediaUrl && mediaType === 'video') payload.link = mediaUrl;
+                     const response = await axios.post(
+                         `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/feed`,
+                         payload
+                     );
+                     return { success: true, platform, id: response.data.id, note: 'text-only fallback' };
                  }
              }
 
