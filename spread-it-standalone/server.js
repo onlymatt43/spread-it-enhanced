@@ -443,11 +443,32 @@ passport.deserializeUser((user, done) => done(null, user));
 app.use(passport.initialize());
 app.use(passport.session());
 
+// Short-lived auth tokens for iframe cross-origin session bridging
+// (session cookie can't cross popup→iframe boundary reliably in all browsers)
+const authTokens = new Map(); // token -> { expiry, user }
+function issueAuthToken(user) {
+  const token = require('crypto').randomBytes(24).toString('hex');
+  authTokens.set(token, { expiry: Date.now() + 5 * 60 * 1000, user });
+  // Cleanup expired tokens
+  for (const [k, v] of authTokens) if (v.expiry < Date.now()) authTokens.delete(k);
+  return token;
+}
+
 // Middleware : protège les routes privées
 const requireAuth = (req, res, next) => {
-  // Si Google Auth pas configuré, bypass (app ouverte jusqu'à config)
+  // Si Google Auth pas configuré, bypass
   if (!googleAuthEnabled) return next();
   if (req.isAuthenticated()) return next();
+  // Check Bearer token (used when session cookie can't cross iframe boundary)
+  const auth = req.headers.authorization || '';
+  if (auth.startsWith('Bearer ')) {
+    const token = auth.slice(7);
+    const entry = authTokens.get(token);
+    if (entry && entry.expiry > Date.now()) {
+      req.user = entry.user; // inject user for this request
+      return next();
+    }
+  }
   // API calls → JSON error
   if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Non authentifié' });
   // Pages → redirect login
@@ -464,6 +485,16 @@ app.get('/login', (req, res) => {
 // Auth status check (called by spread-it-integration.js before opening iframe)
 app.get('/api/auth/check', (req, res) => {
   res.json({ authenticated: req.isAuthenticated() || !googleAuthEnabled });
+});
+
+// Issue a short-lived Bearer token — called from /auth/google/done after successful auth
+// Token is passed to the composer iframe URL to authenticate API calls cross-origin
+app.get('/api/auth/issue-token', (req, res) => {
+  if (!req.isAuthenticated() && googleAuthEnabled) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  const token = issueAuthToken(req.user || { id: 'local' });
+  res.json({ token });
 });
 
 // Media proxy — allows composer to preview Bunny CDN videos without CORS issues
@@ -531,17 +562,20 @@ app.get('/auth/google/callback',
 
 // Popup close page — signals parent window and closes itself
 app.get('/auth/google/done', (req, res) => {
+  // Issue a short-lived token so iframe can auth without relying on cross-site cookies
+  const siToken = (req.isAuthenticated() || !googleAuthEnabled) ? issueAuthToken(req.user || { id: 'local' }) : null;
   res.send(`<!DOCTYPE html><html><head><title>Connected</title>
   <style>
     body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #1a1a2e; color: #fff; gap: 16px; }
     button { padding: 10px 24px; background: #7c3aed; color: #fff; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; }
   </style>
   </head><body>
-  <p>✅ Connexion réussie.</p>
-  <button onclick="window.close()">Fermer cette fenêtre</button>
+  <p>\u2705 Connexion r\u00e9ussie.</p>
+  <button onclick="window.close()">Fermer cette fen\u00eatre</button>
   <script>
+    var siToken = ${JSON.stringify(siToken)};
     if (window.opener) {
-      try { window.opener.postMessage('spread-it-auth-done', '*'); } catch(e) {}
+      try { window.opener.postMessage({ event: 'spread-it-auth-done', token: siToken }, '*'); } catch(e) {}
     }
     setTimeout(function() { window.close(); }, 800);
   <\/script>

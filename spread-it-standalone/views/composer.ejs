@@ -542,7 +542,10 @@
 
         fetch('/api/smart-share-submit', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: Object.assign(
+                { 'Content-Type': 'application/json' },
+                SI_TOKEN ? { 'Authorization': 'Bearer ' + SI_TOKEN } : {}
+            ),
             body: JSON.stringify(payload)
         })
         .then(res => res.json())
@@ -587,6 +590,10 @@
       }
       return url;
     }
+
+    // Read short-lived auth token passed by integration.js in the iframe URL
+    // Used as Bearer token to authenticate API calls when session cookie can't cross iframe boundary
+    const SI_TOKEN = new URLSearchParams(window.location.search).get('si_token') || null;
 
     // --- AUTO-DETECT PREFILLED CONTENT (Video / Media / Meta) ---
     document.addEventListener('DOMContentLoaded', () => {
