@@ -891,15 +891,44 @@ app.post('/api/smart-share-submit', requireAuth, express.json(), async (req, res
                       return { success: false, platform, error: "Missing INSTAGRAM_BUSINESS_ID or Token" };
                  }
 
-                 // 1. Create Media Container
+                 const igCaption = platformCaption + (platformHashtags ? '\n\n' + platformHashtags : '');
                  const containerEndpoint = `https://graph.facebook.com/v18.0/${process.env.INSTAGRAM_BUSINESS_ID}/media`;
-                 const containerRes = await axios.post(containerEndpoint, {
-                     image_url: mediaUrl, // MUST be public
-                     caption: platformCaption + '\n\n' + platformHashtags,
-                     access_token: igToken
-                 });
-                 
+
+                 let containerPayload;
+                 if (mediaType === 'video' && mediaUrl) {
+                     // Reels (vidéo) — Instagram API exige media_type: REELS + video_url
+                     containerPayload = {
+                         media_type: 'REELS',
+                         video_url: mediaUrl,
+                         caption: igCaption,
+                         access_token: igToken
+                     };
+                 } else {
+                     // Image
+                     containerPayload = {
+                         image_url: mediaUrl,
+                         caption: igCaption,
+                         access_token: igToken
+                     };
+                 }
+
+                 // 1. Create Media Container
+                 const containerRes = await axios.post(containerEndpoint, containerPayload);
                  const creationId = containerRes.data.id;
+
+                 // Pour les Reels, Instagram a besoin de temps pour traiter la vidéo
+                 if (mediaType === 'video') {
+                     // Attendre que le container soit prêt (max 30s)
+                     let statusCheckUrl = `https://graph.facebook.com/v18.0/${creationId}?fields=status_code&access_token=${igToken}`;
+                     for (let i = 0; i < 10; i++) {
+                         await new Promise(r => setTimeout(r, 3000));
+                         const statusRes = await axios.get(statusCheckUrl);
+                         if (statusRes.data.status_code === 'FINISHED') break;
+                         if (statusRes.data.status_code === 'ERROR') {
+                             return { success: false, platform, error: 'Instagram video processing failed' };
+                         }
+                     }
+                 }
 
                  // 2. Publish Media
                  const publishEndpoint = `https://graph.facebook.com/v18.0/${process.env.INSTAGRAM_BUSINESS_ID}/media_publish`;
