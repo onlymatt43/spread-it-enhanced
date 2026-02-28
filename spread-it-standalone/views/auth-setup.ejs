@@ -241,6 +241,12 @@
         <h1>🔑 Social Media Setup</h1>
         <p class="subtitle">Connectez vos plateformes en un clic</p>
 
+        <div style="background:#fef3c7;border:2px solid #f59e0b;border-radius:12px;padding:16px 20px;margin-bottom:24px;color:#78350f;font-size:14px;line-height:1.6;">
+            <strong>⚠️ Après chaque connexion</strong> — la page affiche un token à copier. Tu dois le coller manuellement dans
+            <a href="https://dashboard.render.com" target="_blank" style="color:#92400e;font-weight:bold;">Render → Environment Variables → Save Changes</a>.
+            Le serveur redémarre (~2 min) et le statut passe au vert.
+        </div>
+
         <div class="platform-grid">
             <!-- Facebook -->
             <div class="platform-card">
@@ -284,18 +290,26 @@
             <div class="platform-card">
                 <div class="platform-header">
                     <span class="platform-icon">🐦</span>
-                    <span class="platform-name">Twitter</span>
+                    <span class="platform-name">Twitter / X</span>
                 </div>
                 <span class="status-badge <%= platforms.twitter?.connected ? 'connected' : 'disconnected' %>" id="status-twitter">
                     <span class="dot"></span>
                     <%= platforms.twitter?.connected ? 'Connecté' : 'Non connecté' %>
                 </span>
                 <div class="platform-info" id="info-twitter">
-                    <%= platforms.twitter?.connected ? `@${platforms.twitter.username || ''}` : 'OAuth 1.0a (consulter guide manuel)' %>
+                    <% if (platforms.twitter?.connected) { %>
+                        @<%= platforms.twitter.username || '' %>
+                    <% } else { %>
+                        Tokens manuels — va sur
+                        <a href="https://developer.twitter.com/en/portal/projects-and-apps" target="_blank" style="color:#6366f1;">developer.twitter.com</a>
+                        → ton app → Keys and Tokens → copie
+                        <strong>Access Token</strong> &amp; <strong>Access Token Secret</strong>
+                        dans Render (<code>TWITTER_ACCESS_TOKEN</code>, <code>TWITTER_ACCESS_TOKEN_SECRET</code>).
+                    <% } %>
                 </div>
-                <button class="platform-btn <%= platforms.twitter?.connected ? 'connected' : 'disabled' %>" 
+                <button class="platform-btn <%= platforms.twitter?.connected ? 'connected' : 'disabled' %>"
                         id="btn-twitter" disabled>
-                    <%= platforms.twitter?.connected ? '✓ Connecté' : '📖 Guide Manuel' %>
+                    <%= platforms.twitter?.connected ? '✓ Connecté' : '🔑 Tokens manuels (voir ci-dessus)' %>
                 </button>
             </div>
 
@@ -326,14 +340,19 @@
                 </div>
                 <span class="status-badge <%= platforms.tiktok?.connected ? 'connected' : 'disconnected' %>" id="status-tiktok">
                     <span class="dot"></span>
-                    <%= platforms.tiktok?.connected ? 'Connecté' : 'Sandbox Mode' %>
+                    <%= platforms.tiktok?.connected ? 'Connecté' : 'Non connecté' %>
                 </span>
                 <div class="platform-info" id="info-tiktok">
-                    <%= platforms.tiktok?.connected ? platforms.tiktok.username || '' : 'Doit passer en Production Mode' %>
+                    <% if (platforms.tiktok?.connected) { %>
+                        <%= platforms.tiktok.username || '' %>
+                    <% } else { %>
+                        <%= platforms.tiktok?.reason || '' %><br>
+                        <small style="color:#f59e0b;">⚠️ App en Sandbox — publication limitée aux comptes de test. Pour publier publiquement, soumettre l'app en Production sur <a href="https://developers.tiktok.com/apps" target="_blank" style="color:#6366f1;">developers.tiktok.com</a>.</small>
+                    <% } %>
                 </div>
                 <button class="platform-btn <%= platforms.tiktok?.connected ? 'connected' : 'connect' %>" 
                         onclick="connectPlatform('tiktok')" id="btn-tiktok">
-                    <%= platforms.tiktok?.connected ? '✓ Connecté' : '🔗 Connecter' %>
+                    <%= platforms.tiktok?.connected ? '✓ Connecté' : '🔗 Connecter (Sandbox)' %>
                 </button>
             </div>
 
@@ -366,27 +385,32 @@
             </div>
 
             <div class="instruction-item">
-                <strong>LinkedIn - Redirect URL</strong>
-                Allez sur <a href="https://www.linkedin.com/developers/apps" target="_blank">LinkedIn Developers</a> → Votre App → Auth → Authorized redirect URLs:<br>
-                <code>https://spread.onlymatt.ca/auth/linkedin/callback</code>
+                <strong>LinkedIn - Redirect URLs</strong>
+                <a href="https://www.linkedin.com/developers/apps" target="_blank">LinkedIn Developers</a> → App → Auth → Authorized redirect URLs:<br>
+                <code>https://spread.onlymatt.ca/auth/linkedin/callback</code><br>
+                <code>https://spread-it-enhanced.onrender.com/auth/linkedin/callback</code>
             </div>
 
             <div class="instruction-item">
-                <strong>Facebook - Redirect URL</strong>
-                Allez sur <a href="https://developers.facebook.com/apps" target="_blank">Facebook Developers</a> → Votre App → Facebook Login → Settings:<br>
-                <code>https://spread.onlymatt.ca/auth/facebook/callback</code>
+                <strong>Facebook - Redirect URLs</strong>
+                <a href="https://developers.facebook.com/apps" target="_blank">Facebook Developers</a> → App → Facebook Login → Settings:<br>
+                <code>https://spread.onlymatt.ca/auth/facebook/callback</code><br>
+                <code>https://spread-it-enhanced.onrender.com/auth/facebook/callback</code>
             </div>
 
             <div class="instruction-item">
-                <strong>YouTube - Redirect URL</strong>
-                Allez sur <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a> → Credentials → OAuth 2.0 Client → Authorized redirect URIs:<br>
-                <code>https://spread.onlymatt.ca/auth/youtube/callback</code>
+                <strong>YouTube - Redirect URLs</strong>
+                <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a> → Credentials → OAuth 2.0 Client → Authorized redirect URIs:<br>
+                <code>https://spread.onlymatt.ca/auth/youtube/callback</code><br>
+                <code>https://spread-it-enhanced.onrender.com/auth/youtube/callback</code>
             </div>
 
             <div class="instruction-item">
-                <strong>TikTok - Production Mode</strong>
-                Votre app est en Sandbox. Demandez l'accès Production sur <a href="https://developers.tiktok.com/apps" target="_blank">TikTok Developers</a> → Redirect URI:<br>
-                <code>https://spread.onlymatt.ca/auth/tiktok/callback</code>
+                <strong>TikTok - Redirect URI + Production Mode</strong>
+                <a href="https://developers.tiktok.com/apps" target="_blank">TikTok Developers</a> → App → Redirect URI:<br>
+                <code>https://spread.onlymatt.ca/auth/tiktok/callback</code><br>
+                <code>https://spread-it-enhanced.onrender.com/auth/tiktok/callback</code><br>
+                <small>Pour publier publiquement, soumettre une demande de passage en Production Mode.</small>
             </div>
         </div>
     </div>
