@@ -837,6 +837,22 @@ app.post('/api/smart-share-submit', requireAuth, express.json(), async (req, res
                  
                 // Fallback : tempFilePath null — tenter URL directe (Facebook fetche lui-même)
                  else {
+                     if (mediaUrl && mediaType === 'video') {
+                         // Poster via /videos avec file_url — Facebook fetche la vidéo depuis l'URL
+                         try {
+                             const fbVideoResp = await axios.post(
+                                 `https://graph.facebook.com/v18.0/${process.env.FACEBOOK_PAGE_ID}/videos`,
+                                 {
+                                     access_token: fbToken,
+                                     description: platformCaption + (platformHashtags ? '\n\n' + platformHashtags : ''),
+                                     file_url: mediaUrl
+                                 }
+                             );
+                             return { success: true, platform, id: fbVideoResp.data.id };
+                         } catch (videoErr) {
+                             console.warn('⚠️  Facebook /videos file_url failed:', videoErr.response?.data || videoErr.message, '— falling back to link post');
+                         }
+                     }
                      if (mediaUrl && mediaType === 'image') {
                          // Tenter /photos avec URL directe
                          try {
