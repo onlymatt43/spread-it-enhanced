@@ -528,6 +528,13 @@
 
         // Disable button to prevent double-click
         const originalText = btn.innerText;
+
+        // Non-authenticated user → send to promo/waitlist page
+        if (!SI_TOKEN) {
+            window.open('/join', '_blank');
+            return;
+        }
+
         btn.innerText = 'Envoi...';
         btn.disabled = true;
 

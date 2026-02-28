@@ -28,6 +28,13 @@ CREATE TABLE IF NOT EXISTS metrics (
   FOREIGN KEY(share_id) REFERENCES shares(id)
 );
 
+-- Waitlist — early access signups
+CREATE TABLE IF NOT EXISTS waitlist (
+  email TEXT PRIMARY KEY,
+  name TEXT,
+  created_at INTEGER
+);
+
 -- Spreads — main publishing records
 CREATE TABLE IF NOT EXISTS spreads (
   id TEXT PRIMARY KEY,

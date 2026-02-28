@@ -1449,6 +1449,27 @@ app.get('/', (req, res) => {
   res.render('index', { title: 'Spread It — Partagez partout' });
 });
 
+// Waitlist / promo page
+app.get('/join', (req, res) => res.render('join'));
+
+app.post('/api/join', (req, res) => {
+  const { email, name } = req.body || {};
+  if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) {
+    return res.json({ ok: false, error: 'Email invalide.' });
+  }
+  try {
+    turso.run(
+      'INSERT OR IGNORE INTO waitlist (email, name, created_at) VALUES (?, ?, ?)',
+      [email.toLowerCase().trim(), (name || '').trim(), Date.now()]
+    );
+    console.log(`[Waitlist] New signup: ${email}`);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[Waitlist] DB error:', e.message);
+    res.json({ ok: false, error: 'Erreur serveur.' });
+  }
+});
+
 // --- ROUTES LÉGALES (POUR FACEBOOK APP REVIEW) ---
 app.get('/privacy', (req, res) => res.render('privacy'));
 app.get('/terms', (req, res) => res.render('terms'));
