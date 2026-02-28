@@ -961,17 +961,25 @@ app.post('/api/smart-share-submit', requireAuth, express.json(), async (req, res
 
                  // 2. No media → text-only post
                  if (!tempFilePath && !mediaUrl) {
-                     const postRes = await axios.post('https://api.linkedin.com/v2/ugcPosts', {
-                         author: personUrn,
-                         lifecycleState: 'PUBLISHED',
-                         specificContent: {
-                             'com.linkedin.ugc.ShareContent': {
-                                 shareCommentary: { text: liCaption },
-                                 shareMediaCategory: 'NONE'
-                             }
-                         },
-                         visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
-                     }, { headers: liHeaders });
+                     let postRes;
+                     try {
+                         postRes = await axios.post('https://api.linkedin.com/v2/ugcPosts', {
+                             author: personUrn,
+                             lifecycleState: 'PUBLISHED',
+                             specificContent: {
+                                 'com.linkedin.ugc.ShareContent': {
+                                     shareCommentary: { text: liCaption },
+                                     shareMediaCategory: 'NONE'
+                                 }
+                             },
+                             visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
+                         }, { headers: liHeaders });
+                     } catch (postErr) {
+                         const status = postErr.response?.status;
+                         if (status === 429) return { success: false, platform, error: 'LinkedIn rate limit — max ~3 posts/jour. Réessaie demain.' };
+                         if (status === 401 || status === 403) return { success: false, platform, error: 'LinkedIn token expiré — va dans /auth/setup pour reconnecter.' };
+                         throw postErr;
+                     }
                      return { success: true, platform, id: postRes.data.id };
                  }
 
@@ -1013,23 +1021,31 @@ app.post('/api/smart-share-submit', requireAuth, express.json(), async (req, res
                  });
 
                  // Create UGC post with asset
-                 const postRes = await axios.post('https://api.linkedin.com/v2/ugcPosts', {
-                     author: personUrn,
-                     lifecycleState: 'PUBLISHED',
-                     specificContent: {
-                         'com.linkedin.ugc.ShareContent': {
-                             shareCommentary: { text: liCaption },
-                             shareMediaCategory: mediaCategory,
-                             media: [{
-                                 status: 'READY',
-                                 description: { text: liCaption.substring(0, 200) },
-                                 media: assetUrn,
-                                 title: { text: platformCaption.substring(0, 100) }
-                             }]
-                         }
-                     },
-                     visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
-                 }, { headers: liHeaders });
+                 let postRes;
+                 try {
+                     postRes = await axios.post('https://api.linkedin.com/v2/ugcPosts', {
+                         author: personUrn,
+                         lifecycleState: 'PUBLISHED',
+                         specificContent: {
+                             'com.linkedin.ugc.ShareContent': {
+                                 shareCommentary: { text: liCaption },
+                                 shareMediaCategory: mediaCategory,
+                                 media: [{
+                                     status: 'READY',
+                                     description: { text: liCaption.substring(0, 200) },
+                                     media: assetUrn,
+                                     title: { text: platformCaption.substring(0, 100) }
+                                 }]
+                             }
+                         },
+                         visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
+                     }, { headers: liHeaders });
+                 } catch (postErr) {
+                     const status = postErr.response?.status;
+                     if (status === 429) return { success: false, platform, error: 'LinkedIn rate limit — max ~3 posts/jour. Réessaie demain.' };
+                     if (status === 401 || status === 403) return { success: false, platform, error: 'LinkedIn token expiré — va dans /auth/setup pour reconnecter LinkedIn.' };
+                     throw postErr;
+                 }
 
                  return { success: true, platform, id: postRes.data.id };
              }
@@ -1160,10 +1176,14 @@ app.post('/api/smart-share-submit', requireAuth, express.json(), async (req, res
         }
 
         res.json({ 
-            success: errors.length === 0, 
+            success: errors.length === 0 && results.every(r => r.success), 
             results, 
             errors,
-            message: errors.length > 0 ? "Some platforms failed due to missing keys." : "Published successfully!" 
+            message: errors.length > 0 
+                ? errors.map(e => `${e.platform}: ${e.error}`).join(' | ')
+                : results.some(r => !r.success)
+                    ? results.filter(r => !r.success).map(r => `${r.platform}: ${r.error}`).join(' | ')
+                    : 'Publié avec succès !'
         });
 
     } catch (error) {
