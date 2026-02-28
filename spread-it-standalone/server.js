@@ -461,9 +461,16 @@ app.get('/login', (req, res) => {
   res.render('login', { error: req.query.error || null });
 });
 
+// Auth status check (called by spread-it-integration.js before opening iframe)
+app.get('/api/auth/check', (req, res) => {
+  res.json({ authenticated: req.isAuthenticated() || !googleAuthEnabled });
+});
+
 app.get('/auth/google/start',
   (req, res, next) => {
     if (!googleAuthEnabled) return res.redirect('/login?error=Google+Auth+non+configuré');
+    // Store popup mode in session so callback knows where to redirect
+    if (req.query.popup === '1') req.session.googlePopup = true;
     next();
   },
   passport.authenticate('google', { scope: ['email', 'profile'] })
@@ -476,11 +483,25 @@ app.get('/auth/google/callback',
   },
   passport.authenticate('google', { failureRedirect: '/login?error=Email+non+autorisé' }),
   (req, res) => {
+    const isPopup = req.session.googlePopup;
+    delete req.session.googlePopup;
+    if (isPopup) return res.redirect('/auth/google/done');
     const returnTo = req.session.returnTo || '/';
     delete req.session.returnTo;
     res.redirect(returnTo);
   }
 );
+
+// Popup close page — signals parent window and closes itself
+app.get('/auth/google/done', (req, res) => {
+  res.send(`<!DOCTYPE html><html><head><title>Connected</title></head><body>
+  <script>
+    try { window.opener.postMessage('spread-it-auth-done', '*'); } catch(e) {}
+    window.close();
+  <\/script>
+  <p>Connexion réussie, fermeture...</p>
+  </body></html>`);
+});
 
 app.get('/logout', (req, res) => {
   req.logout(() => res.redirect('/login'));
