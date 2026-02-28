@@ -943,13 +943,95 @@ app.post('/api/smart-share-submit', requireAuth, express.json(), async (req, res
 
              // --- LINKEDIN ---
              if (platform === 'linkedin') {
-                 // Requires LinkedIn API setup which is complex (URNs, Assets).
-                 // Returning mock with error warning for now unless configured.
-                 if(!process.env.LINKEDIN_ACCESS_TOKEN) 
-                    return { success: false, platform, error: "Missing LINKEDIN_ACCESS_TOKEN" };
-                
-                // (Implementation omitted for brevity, would require 'author' URN and media upload flow)
-                return { success: true, platform, id: 'mock_linkedin_' + Date.now(), warning: "LinkedIn implementation pending" };
+                 const liToken = process.env.LINKEDIN_ACCESS_TOKEN;
+                 if (!liToken) return { success: false, platform, error: "Missing LINKEDIN_ACCESS_TOKEN" };
+
+                 const liHeaders = {
+                     'Authorization': `Bearer ${liToken}`,
+                     'Content-Type': 'application/json',
+                     'X-Restli-Protocol-Version': '2.0.0'
+                 };
+                 const liCaption = platformCaption + (platformHashtags ? '\n\n' + platformHashtags : '');
+
+                 // 1. Get person URN
+                 const profileRes = await axios.get('https://api.linkedin.com/v2/userinfo', {
+                     headers: { 'Authorization': `Bearer ${liToken}` }
+                 });
+                 const personUrn = `urn:li:person:${profileRes.data.sub}`;
+
+                 // 2. No media → text-only post
+                 if (!tempFilePath && !mediaUrl) {
+                     const postRes = await axios.post('https://api.linkedin.com/v2/ugcPosts', {
+                         author: personUrn,
+                         lifecycleState: 'PUBLISHED',
+                         specificContent: {
+                             'com.linkedin.ugc.ShareContent': {
+                                 shareCommentary: { text: liCaption },
+                                 shareMediaCategory: 'NONE'
+                             }
+                         },
+                         visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
+                     }, { headers: liHeaders });
+                     return { success: true, platform, id: postRes.data.id };
+                 }
+
+                 // 3. With media → register upload → binary upload → create post
+                 const mediaCategory = mediaType === 'video' ? 'VIDEO' : 'IMAGE';
+                 const recipe = mediaType === 'video'
+                     ? 'urn:li:digitalmediaRecipe:feedshare-video'
+                     : 'urn:li:digitalmediaRecipe:feedshare-image';
+
+                 const registerRes = await axios.post(
+                     'https://api.linkedin.com/v2/assets?action=registerUpload',
+                     {
+                         registerUploadRequest: {
+                             recipes: [recipe],
+                             owner: personUrn,
+                             serviceRelationships: [{
+                                 relationshipType: 'OWNER',
+                                 identifier: 'urn:li:userGeneratedContent'
+                             }]
+                         }
+                     },
+                     { headers: liHeaders }
+                 );
+
+                 const uploadUrl = registerRes.data.value.uploadMechanism[
+                     'com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'
+                 ].uploadUrl;
+                 const assetUrn = registerRes.data.value.asset;
+
+                 // Upload binary file
+                 const fileBuffer = fs.readFileSync(tempFilePath);
+                 await axios.put(uploadUrl, fileBuffer, {
+                     headers: {
+                         'Authorization': `Bearer ${liToken}`,
+                         'Content-Type': mediaType === 'video' ? 'video/mp4' : 'image/jpeg'
+                     },
+                     maxBodyLength: Infinity,
+                     maxContentLength: Infinity
+                 });
+
+                 // Create UGC post with asset
+                 const postRes = await axios.post('https://api.linkedin.com/v2/ugcPosts', {
+                     author: personUrn,
+                     lifecycleState: 'PUBLISHED',
+                     specificContent: {
+                         'com.linkedin.ugc.ShareContent': {
+                             shareCommentary: { text: liCaption },
+                             shareMediaCategory: mediaCategory,
+                             media: [{
+                                 status: 'READY',
+                                 description: { text: liCaption.substring(0, 200) },
+                                 media: assetUrn,
+                                 title: { text: platformCaption.substring(0, 100) }
+                             }]
+                         }
+                     },
+                     visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
+                 }, { headers: liHeaders });
+
+                 return { success: true, platform, id: postRes.data.id };
              }
 
              // --- YOUTUBE SHORTS (Natif) ---
