@@ -1471,14 +1471,14 @@ app.get('/api/platforms/status', async (req, res) => {
     // TIKTOK
     if (process.env.TIKTOK_ACCESS_TOKEN) {
       try {
-        // TikTok user info endpoint
         const ttResponse = await axios.get('https://open.tiktokapis.com/v2/user/info/', {
           headers: { 'Authorization': `Bearer ${process.env.TIKTOK_ACCESS_TOKEN}` },
+          params: { fields: 'open_id,display_name,avatar_url' },
           timeout: 5000
         });
         status.tiktok = { 
           connected: true, 
-          username: ttResponse.data.data.user.display_name 
+          username: ttResponse.data.data?.user?.display_name || 'TikTok user'
         };
       } catch (error) {
         status.tiktok = { 
