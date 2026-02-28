@@ -746,38 +746,85 @@ app.post('/api/smart-share-submit', requireAuth, express.json(), async (req, res
         // (Note: Many APIs require a local file stream or binary buffer, 
         // passing a raw URL often fails if the platform needs to re-host it)
         if (mediaUrl) {
+          console.log("⬇️  Attempting to download media:", mediaUrl);
+          // Try multiple strategies to obtain a local copy for APIs that require it
+          let downloaded = false;
+          const mediaOrigin = mediaUrl ? new URL(mediaUrl).origin : '';
+
+          // Strategy 1: axios stream (fast path)
+          try {
+            const response = await axios({
+              method: 'GET',
+              url: mediaUrl,
+              responseType: 'stream',
+              timeout: 20000,
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (compatible; SpreadItBot/1.0)',
+                'Referer': mediaOrigin,
+                'Origin': mediaOrigin,
+                'Accept': 'image/*,video/*,*/*'
+              }
+            });
+            if (response.status >= 400) throw new Error(`HTTP ${response.status}`);
+            const w = fs.createWriteStream(tempFilePath);
+            response.data.pipe(w);
+            await new Promise((resolve, reject) => { w.on('finish', resolve); w.on('error', reject); });
+            downloaded = true;
+            console.log("✅ Download complete (axios):", tempFilePath);
+          } catch (e1) {
+            console.warn("⚠️ axios download failed:", e1.message);
+          }
+
+          // Strategy 2: node fetch stream (alternate headers / redirects)
+          if (!downloaded) {
             try {
-                console.log("⬇️  Downloading media:", mediaUrl);
-                // Extraire le domaine source pour le Referer (bypass hotlink protection)
-                const mediaOrigin = mediaUrl ? new URL(mediaUrl).origin : '';
-                const response = await axios({
-                    method: 'GET',
-                    url: mediaUrl,
-                    responseType: 'stream',
-                    timeout: 20000,
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (compatible; SpreadItBot/1.0)',
-                        'Referer': mediaOrigin,
-                        'Origin': mediaOrigin,
-                        'Accept': 'image/*,video/*,*/*'
-                    }
-                });
-                if (response.status === 403 || response.status === 401) {
-                    throw new Error(`HTTP ${response.status} — média inaccessible depuis Render`);
-                }
-                const w = fs.createWriteStream(tempFilePath);
-                response.data.pipe(w);
-                await new Promise((resolve, reject) => {
-                    w.on('finish', resolve);
-                    w.on('error', reject);
-                });
-                console.log("✅ Download complete:", tempFilePath);
-            } catch (dlErr) {
-                console.warn("⚠️  Media download failed, will use URL fallback:", dlErr.message);
-                tempFilePath = null;
+              const headers = {
+                'User-Agent': 'Mozilla/5.0 (compatible; SpreadIt/1.0)',
+                'Accept': 'video/*, image/*, */*',
+                'Referer': mediaOrigin,
+                'Origin': mediaOrigin
+              };
+              const upstream = await fetch(mediaUrl, { method: 'GET', headers, redirect: 'follow' });
+              if (!upstream.ok) throw new Error(`HTTP ${upstream.status}`);
+              const dest = fs.createWriteStream(tempFilePath);
+              await new Promise((resolve, reject) => {
+                upstream.body.pipe(dest);
+                dest.on('finish', resolve);
+                dest.on('error', reject);
+              });
+              downloaded = true;
+              console.log("✅ Download complete (fetch):", tempFilePath);
+            } catch (e2) {
+              console.warn("⚠️ fetch download failed:", e2.message);
             }
-        } else {
+          }
+
+          // Strategy 3: use internal proxy endpoint to fetch and stream
+          if (!downloaded) {
+            try {
+              const baseUrl = process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || 'http://localhost:3000';
+              const proxyEndpoint = baseUrl.replace(/\/$/, '') + '/api/media-proxy?url=' + encodeURIComponent(mediaUrl);
+              const upstream = await fetch(proxyEndpoint, { method: 'GET', redirect: 'follow' });
+              if (!upstream.ok) throw new Error(`Proxy HTTP ${upstream.status}`);
+              const dest = fs.createWriteStream(tempFilePath);
+              await new Promise((resolve, reject) => {
+                upstream.body.pipe(dest);
+                dest.on('finish', resolve);
+                dest.on('error', reject);
+              });
+              downloaded = true;
+              console.log("✅ Download complete (internal proxy):", tempFilePath);
+            } catch (e3) {
+              console.warn("⚠️ internal proxy download failed:", e3.message);
+            }
+          }
+
+          if (!downloaded) {
+            console.warn("⚠️  All download strategies failed — will proceed with URL fallback (platforms that require file may fail)");
             tempFilePath = null;
+          }
+        } else {
+          tempFilePath = null;
         }
 
         // VÉRIFICATION GLOBALE ANTI-DETECTION
