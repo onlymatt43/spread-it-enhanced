@@ -978,7 +978,13 @@ app.post('/api/smart-share-submit', requireAuth, express.json(), async (req, res
                  }
 
                  // 1. Create Media Container
-                 const containerRes = await axios.post(containerEndpoint, containerPayload);
+                 let containerRes;
+                 try {
+                     containerRes = await axios.post(containerEndpoint, containerPayload);
+                 } catch (igErr) {
+                     const igMsg = igErr.response?.data?.error?.message || igErr.response?.data?.error?.code || igErr.message;
+                     return { success: false, platform, error: `Instagram container error: ${igMsg}` };
+                 }
                  const creationId = containerRes.data.id;
 
                  // Pour les Reels, Instagram a besoin de temps pour traiter la vidéo
@@ -997,10 +1003,16 @@ app.post('/api/smart-share-submit', requireAuth, express.json(), async (req, res
 
                  // 2. Publish Media
                  const publishEndpoint = `https://graph.facebook.com/v18.0/${process.env.INSTAGRAM_BUSINESS_ID}/media_publish`;
-                 const publishRes = await axios.post(publishEndpoint, {
-                     creation_id: creationId,
-                     access_token: igToken
-                 });
+                 let publishRes;
+                 try {
+                     publishRes = await axios.post(publishEndpoint, {
+                         creation_id: creationId,
+                         access_token: igToken
+                     });
+                 } catch (igPubErr) {
+                     const igMsg = igPubErr.response?.data?.error?.message || igPubErr.response?.data?.error?.code || igPubErr.message;
+                     return { success: false, platform, error: `Instagram publish error: ${igMsg}` };
+                 }
 
                  return { success: true, platform, id: publishRes.data.id };
              }
