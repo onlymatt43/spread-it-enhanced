@@ -1444,8 +1444,9 @@ app.get('/api/learning-dashboard', async (req, res) => {
     }
 });
 
-app.get('/', requireAuth, (req, res) => {
-  res.redirect('/spreads');
+app.get('/', (req, res) => {
+  if (req.isAuthenticated()) return res.redirect('/spreads');
+  res.render('index', { title: 'Spread It — Partagez partout' });
 });
 
 // --- ROUTES LÉGALES (POUR FACEBOOK APP REVIEW) ---
