@@ -578,6 +578,16 @@
     const sendBtn = document.getElementById('sendMessage');
     if(sendBtn) sendBtn.addEventListener('click', () => handleSend());
 
+    // Proxy CDN media through Render to bypass CORS (preview only — original URL still published)
+    function proxyUrl(url) {
+      if (!url) return url;
+      // Only proxy Bunny CDN URLs to avoid unnecessary proxying
+      if (url.includes('b-cdn.net') || url.includes('bunnycdn.com')) {
+        return '/api/media-proxy?url=' + encodeURIComponent(url);
+      }
+      return url;
+    }
+
     // --- AUTO-DETECT PREFILLED CONTENT (Video / Media / Meta) ---
     document.addEventListener('DOMContentLoaded', () => {
         const params = new URLSearchParams(window.location.search);
@@ -618,7 +628,7 @@
             const thumbToShow = window.CURRENT_POSTER || (window.CURRENT_VIDEO_URL && !window.CURRENT_VIDEO_URL.endsWith('.mp4') ? window.CURRENT_VIDEO_URL : null);
             
             if(thumbToShow) {
-                visualHtml += `<br><img src="${thumbToShow}" style="max-width:120px; border-radius:8px; margin-top:8px; display:block; border:1px solid #333;" alt="Aperçu">`;
+                visualHtml += `<br><img src="${proxyUrl(thumbToShow)}" style="max-width:120px; border-radius:8px; margin-top:8px; display:block; border:1px solid #333;" alt="Aperçu">`;
             }
             
             if(window.CURRENT_VIDEO_URL) visualHtml += `<div style="font-size:0.8em; color:#4ade80; margin-top:4px">✓ Vidéo chargée</div>`;
@@ -766,12 +776,12 @@
 
                         if (mediaUrl) {
                             if (mediaType === 'video') {
-                                let posterAttr = window.CURRENT_POSTER ? `poster="${window.CURRENT_POSTER}"` : '';
-                                mediaArea.innerHTML = `<video src="${mediaUrl}" controls playsinline loop ${posterAttr} style="width:100%; height:100%; object-fit:cover; max-height:500px; display:block; background:#000;"
-                                  onerror="this.replaceWith(Object.assign(document.createElement('div'),{innerHTML:'⚠️ Aperçu non disponible (CORS) — le média sera publié normalement',style:'padding:20px;text-align:center;color:#fbbf24;font-size:12px;border:1px dashed #fbbf24;background:#1a1a1a'}))"></video>`;
+                                let posterAttr = window.CURRENT_POSTER ? `poster="${proxyUrl(window.CURRENT_POSTER)}"` : '';
+                                mediaArea.innerHTML = `<video src="${proxyUrl(mediaUrl)}" controls playsinline loop ${posterAttr} style="width:100%; height:100%; object-fit:cover; max-height:500px; display:block; background:#000;"
+                                  onerror="this.replaceWith(Object.assign(document.createElement('div'),{innerHTML:'⚠️ Aperçu non disponible — le média sera publié normalement',style:'padding:20px;text-align:center;color:#fbbf24;font-size:12px;border:1px dashed #fbbf24;background:#1a1a1a'}))"></video>`;
                             } else {
-                                mediaArea.innerHTML = `<img src="${mediaUrl}" style="width:100%; height:auto; display:block; object-fit:cover;"
-                                  onerror="this.replaceWith(Object.assign(document.createElement('div'),{innerHTML:'⚠️ Aperçu non disponible (CORS) — le média sera publié normalement',style:'padding:20px;text-align:center;color:#fbbf24;font-size:12px;border:1px dashed #fbbf24;background:#1a1a1a'}))">`;
+                                mediaArea.innerHTML = `<img src="${proxyUrl(mediaUrl)}" style="width:100%; height:auto; display:block; object-fit:cover;"
+                                  onerror="this.replaceWith(Object.assign(document.createElement('div'),{innerHTML:'⚠️ Aperçu non disponible — le média sera publié normalement',style:'padding:20px;text-align:center;color:#fbbf24;font-size:12px;border:1px dashed #fbbf24;background:#1a1a1a'}))">`;
                             }
                         } else if (platform === 'instagram' && !mediaUrl) {
                              mediaArea.innerHTML = `<div style="padding:20px; text-align:center; color:#ef4444; font-size:12px; border:1px dashed #ef4444; margin:10px;">⚠️ Un média est requis pour Instagram</div>`;

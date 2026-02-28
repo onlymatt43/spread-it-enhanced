@@ -466,6 +466,43 @@ app.get('/api/auth/check', (req, res) => {
   res.json({ authenticated: req.isAuthenticated() || !googleAuthEnabled });
 });
 
+// Media proxy — allows composer to preview Bunny CDN videos without CORS issues
+app.get('/api/media-proxy', async (req, res) => {
+  const url = req.query.url;
+  if (!url) return res.status(400).send('Missing url');
+  // Only allow trusted CDN domains
+  const allowed = ['b-cdn.net', 'bunnycdn.com', 'vz-72668a20-6b9.b-cdn.net', 'vz-c69f4e3f-963.b-cdn.net'];
+  let isAllowed = false;
+  try { isAllowed = allowed.some(d => new URL(url).hostname.endsWith(d)); } catch(e) {}
+  if (!isAllowed) return res.status(403).send('Domain not allowed');
+  try {
+    const range = req.headers.range;
+    const headers = { 'User-Agent': 'SpreadIt/1.0' };
+    if (range) headers['Range'] = range;
+    const upstream = await fetch(url, { headers });
+    const contentType = upstream.headers.get('content-type') || 'video/mp4';
+    const contentLength = upstream.headers.get('content-length');
+    const contentRange = upstream.headers.get('content-range');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', contentType);
+    if (contentLength) res.setHeader('Content-Length', contentLength);
+    if (contentRange) res.setHeader('Content-Range', contentRange);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.status(upstream.status);
+    const reader = upstream.body.getReader();
+    const pump = async () => {
+      const { done, value } = await reader.read();
+      if (done) { res.end(); return; }
+      res.write(Buffer.from(value));
+      return pump();
+    };
+    await pump();
+  } catch(e) {
+    console.error('[media-proxy]', e.message);
+    res.status(502).send('Proxy error');
+  }
+});
+
 app.get('/auth/google/start',
   (req, res, next) => {
     if (!googleAuthEnabled) return res.redirect('/login?error=Google+Auth+non+configuré');
