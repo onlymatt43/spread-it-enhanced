@@ -1,83 +1,123 @@
-# 🚀 Spread It - Standalone (v2.0 "Manifesto Edition")
+# Spread It — Standalone
 
-**L'Arme Absolue pour la Domination des Réseaux Sociaux (Style OnlyMatt).**
-
-Spread It est une application d'automatisation intelligente qui combine **Newsjacking**, **Stratégie Hybride** et **IA Provocatrice** pour gérer vos publications sur Facebook, Instagram, LinkedIn et Twitter (X).
-
----
-
-## 🔥 Pourquoi c'est différent ?
-
-Ce n'est pas juste un "scheduler". C'est un **Stratège Numérique**.
-*   **Identité Forte "Manifesto"** : L'IA ne parle pas comme un robot. Elle parle franglais, elle est edgy, "dark & sexy", et utilise des *vibe checks*.
-*   **Newsjacking Automatique** : Elle scanne Google Trends en temps réel pour lier votre contenu à l'actualité mondiale (même absurdement).
-*   **Réseaux de "Goal Accounts"** : Elle connaît vos modèles (GaryVee, McKinnon, etc.) et s'en inspire ou les "challenge".
-*   **Authentification "Infinite Token"** : Système OAuth avancé qui maintient une connexion permanente avec Meta sans reconnexion horaire.
-*   **Base de Données Hybride** : Synchronisation *Dual-Write* entre SQLite local (rapide) et Turso Cloud (persistant & distribué).
+**Déployé sur** : https://spread.onlymatt.ca  
+**Repo** : https://github.com/onlymatt43/spread-it-enhanced  
+**Branche active** : `master`  
+**Dernier commit déployé** : `ed292dd`
 
 ---
 
-## 🛠 Installation Rapide
+## Architecture (état actuel, vérifié)
 
-### 1. Prérequis
-*   Node.js 18+
-*   Un compte Render ou Vercel
-*   Des comptes développeurs (Meta, Twitter, LinkedIn)
-*   Clé OpenAI (GPT-4)
+### Flow utilisateur
 
-### 2. Installation Locale
+```
+Tout le monde → https://spread.onlymatt.ca
+    ↓
+Upload media (fichier ou URL) → Ouvrir le composer
+    ↓
+showComposer() fetch /api/auth/issue-token silencieusement
+    ├── Cookie de session valide (admin connecté) → si_token injecté → Publish actif
+    └── Pas de session → pas de token → Publish → ouvre /join dans nouvel onglet
+```
+
+### Routes vérifiées dans `server.js`
+
+| Route | Auth | Description |
+|---|---|---|
+| `GET /` | aucune | Landing page — upload panel pour tout le monde |
+| `GET /composer` | aucune | Composer — contrôle d'accès via `SI_TOKEN` dans l'UI |
+| `GET /join` | aucune | Page promo + formulaire waitlist |
+| `POST /api/join` | aucune | Sauvegarde email dans table `waitlist` |
+| `POST /api/upload-media` | aucune | Upload fichier → `public/uploads/` → retourne URL + type |
+| `GET /api/auth/issue-token` | session | Retourne JWT si session Google OAuth valide, 401 sinon |
+| `GET /auth/google/start` | aucune | Lance OAuth Google |
+| `GET /auth/google/callback` | aucune | Callback OAuth → session → redirect `/` |
+| `GET /spreads` | requireAuth | Dashboard historique (admin seulement) |
+
+### Comportement du composer (`views/composer.ejs`)
+
+```javascript
+// SI_TOKEN lu depuis ?si_token= dans l'URL (injecté par showComposer si connecté)
+const SI_TOKEN = new URLSearchParams(window.location.search).get('si_token') || null;
+
+// Sur Publish :
+if (!SI_TOKEN) {
+    window.open('/join', '_blank');  // visiteur → promo
+    return;
+}
+// sinon → publie pour vrai
+```
+
+### Base de données SQLite (`db/migrations.sql`)
+
+Tables présentes :
+- `experiments` — tests A/B
+- `shares` — historique des publications
+- `metrics` — analytics
+- `waitlist` — emails collectés via `/join`
+- `spreads` — posts créés
+- `resources` — ressources media
+
+---
+
+## Google OAuth (état actuel)
+
+- **App** : "Spread It" dans Google Console
+- **Mode** : Testing — seul `mathieu@onlymatt.ca` peut se connecter
+- **Web client utilisé** : Web client 2 (`152118116523-jqd...`) — URIs configurés pour `spread.onlymatt.ca`
+- **Callback** : `https://spread.onlymatt.ca/auth/google/callback`
+- **Pour ouvrir aux users** : publier l'app dans Google Console + ajouter bouton login sur le landing
+
+---
+
+## Déploiement
+
+Hébergé sur **Render** (Web Service), déploiement automatique sur push `master`.
+
 ```bash
-git clone <votre-repo>
-cd spread-it-standalone
+# Build
 npm install
+
+# Start
 node server.js
 ```
 
-### 3. Configuration (.env)
-Copiez `.env.example` en `.env` (ou `.env.local`).
-Variables critiques :
-*   `OPENAI_API_KEY`: Le cerveau.
-*   `FACEBOOK_ACCESS_TOKEN` / `INSTAGRAM_ACCESS_TOKEN`: Le token "User" longue durée (60 jours).
-*   `FACEBOOK_PAGE_ID` / `INSTAGRAM_BUSINESS_ID`: Les IDs cibles.
-*   `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN`: Pour la persistance Cloud.
+### Variables d'environnement requises
+
+```
+OPENAI_API_KEY
+GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET
+GOOGLE_ALLOWED_EMAIL
+APP_BASE_URL=https://spread.onlymatt.ca
+SESSION_SECRET
+GOOGLE_SITE_VERIFICATION
+FACEBOOK_ACCESS_TOKEN / FACEBOOK_PAGE_ID
+INSTAGRAM_ACCESS_TOKEN / INSTAGRAM_BUSINESS_ID
+TWITTER_ACCESS_TOKEN / TWITTER_ACCESS_TOKEN_SECRET / TWITTER_API_KEY / TWITTER_API_SECRET
+LINKEDIN_ACCESS_TOKEN
+TIKTOK_ACCESS_TOKEN
+YOUTUBE_REFRESH_TOKEN / YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET
+```
 
 ---
 
-## ⚡️ Fonctionnalités Clés
+## Historique des commits récents
 
-### 🧠 The Strategist (Le Cerveau)
-Le module `services/strategist.js` est le cœur du système.
-*   **Analyse Contextuelle** : Comprend si vous postez une vidéo ou une photo.
-*   **Persona Engine** : Applique le style "OnlyMatt" (Franglais, Broken Syntax, Edgy).
-*   **Vibe Check** : Ajoute une interprétation culturelle à chaque post.
-
-### 🎨 The Composer (L'UI)
-*   **Mockups Réalistes** : Prévisualisation exacte (Pixel Perfect) des posts FB, IG, X et LinkedIn (Dark Mode 2025).
-*   **Smart Upload** : Détection automatique des ratios (16:9 vs 9:16).
-*   **Validation Légale** : Pages intégrées (`/privacy`, `/terms`) pour satisfaire les audits Meta.
-
----
-
-## 🔒 Sécurité & Légal
-
-L'application est "Compliance-Ready" pour Meta :
-*   Endpoint de suppression de données : `/data-deletion`
-*   Pas de stockage de mots de passe (Oauth Only).
-*   IP Restreinte possible (mais désactivée pour dev dynamique).
+| Commit | Description |
+|---|---|
+| `ed292dd` | Remove requireAuth from /composer — accès contrôlé par SI_TOKEN |
+| `142feb9` | Flow unifié sur / — si_token fetché silencieusement |
+| `902f922` | Fix h1 "Spread It" pour vérification Google OAuth |
+| `7e5edb2` | Support google-site-verification meta tag |
+| `d4cd891` | state:true sur Google OAuth |
+| `214fff9` | Page /join + waitlist pour users non-auth |
+| `23445a4` | Homepage upload pour users non-auth |
+| `0376f39` | Silence logs session file-store |
+| `6b3d3cb` | Ajout table spreads dans migrations |
+| `ed12362` | Upload flow sur homepage (fichier + URL) |
 
 ---
 
-## 🚀 Déploiement (Render)
-
-1. Connectez votre GitHub à Render.
-2. Créez un **Web Service**.
-3. Build Command: `npm install`
-4. Start Command: `node server.js`
-5. Ajoutez vos Variables d'Environnement.
-6. **Magie.**
-
----
-
-*© 2026 Only Matt - "Spread It" Proprietary System.*
-
-Pour la documentation technique complète, voir [SPREAD-IT-SYSTEM-BIBLE.md](SPREAD-IT-SYSTEM-BIBLE.md).
+*© 2026 Only Matt*
