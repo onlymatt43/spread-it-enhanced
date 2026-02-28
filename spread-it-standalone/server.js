@@ -1083,7 +1083,7 @@ app.post('/api/ai-edit', requireAuth, express.json(), async (req, res) => {
     const hooks = Array.isArray(patterns.successfulHooks) ? patterns.successfulHooks.slice(0, 3) : [];
     const topTags = (topPerformers?.topHashtags || []).slice(0, 10).map(h => h.tag).join(' ');
 
-    const sys = `You are an expert ${platform} editor. Apply the user's instruction to improve ONLY the AI section of a post while aligning with current market patterns. STRICT RULES: 1) Do NOT include or modify LOCKED_TEXT; it will be appended separately. 2) Return only the edited AI section as plain text, no markdown, no quotes. 3) Follow platform style: keep length near avgLength=${Math.round(patterns.avgLength || 140)}, emojiRatio~${patterns.emojiRatio||0}, questionRatio~${patterns.questionRatio||0}, hashtagRatio~${patterns.hashtagRatio||0}, ctaRatio~${patterns.ctaRatio||0}. 4) Prefer hooks: ${hooks.join(' | ')}. 5) Prefer proven hashtags when relevant.`;
+    const sys = `You are an expert ${platform} editor writing in natural Québec franglais. Apply the user's instruction to improve ONLY the AI section of a post. STRICT RULES: 1) Do NOT include or modify LOCKED_TEXT; it will be appended separately. 2) Return only the edited AI section as plain text, no markdown, no quotes. 3) Tone: dry, natural, human — never enthusiastic, never "Incroyable!" or marketing speak. 4) 0-1 emoji max. 5) Follow platform style: keep length near avgLength=${Math.round(patterns.avgLength || 140)}. 6) Prefer proven hashtags when relevant.`;
 
     const user = `LOCKED_TEXT (do not modify, do not include):\n${lockedText}\n\nCURRENT_AI_SECTION:\n${base}\n\nINSTRUCTION:\n${instruction}\n\nPROVEN_HASHTAGS:\n${topTags}\n\nReturn only the revised AI section.`;
 
@@ -1638,31 +1638,29 @@ app.post('/api/edit-spread-chat', express.json(), async (req, res) => {
 
     // Platform-specific AI personalities
     const platformPersonalities = {
-      facebook: "Tu es l'AI Facebook: storytelling engageant, début intrigant, texte moyen/long, questions pour engagement.",
-      instagram: "Tu es l'AI Instagram: visuel-first, légende courte + punchy, hashtags en bloc à la fin.",
-      twitter: "Tu es l'AI Twitter: shitposting ou value bomb, < 280 caractères, pas de hashtags de boomer.",
-      linkedin: "Tu es l'AI LinkedIn: expert mais pas chiant, 'broetry', structure Accroche→Leçon→Question.",
-      tiktok: "Tu es l'AI TikTok: caption minuscule (100-150 chars), mots-clés SEO, ton GEN Z/CHAOS.",
-      youtube: "Tu es l'AI YouTube: titre punchy + tags pour Shorts, accrocheur dès le début."
+      facebook: "Facebook: storytelling naturel, ton de conversation, texte moyen, une question optionnelle à la fin. Pas de listes à puces, pas de 🔥 partout.",
+      instagram: "Instagram: caption courte et directe, 1-2 emojis max, hashtags discrets à la fin.",
+      twitter: "Twitter: phrase sèche, observation ou fait, < 280 chars, zéro hashtag à moins que ça fit naturellement.",
+      linkedin: "LinkedIn: ton professionnel mais humain, partage une leçon ou observation personnelle, pas de buzzwords.",
+      tiktok: "TikTok: caption ultra-courte (1-2 phrases), quelques hashtags SEO.",
+      youtube: "YouTube: titre clair + description courte, direct au but."
     };
 
-    const systemPrompt = `${platformPersonalities[platform] || 'Tu es un AI de création de contenu.'}
+    const systemPrompt = `${platformPersonalities[platform] || "Tu es un assistant de création de contenu naturel et humain."}
 
-L'utilisateur a ce post actuel:
+VOIX : Franglais québécois naturel, blasé, dry. Pas d'enthousiasme forcé. Pas de "Incroyable!" ni de "C'est AMAZING!". Parle comme un humain, pas comme une pub.
+
+Post actuel :
 "${currentText}"
 
-Il te demande: "${userMessage}"
+Demande : "${userMessage}"
 
-IMPORTANT:
-- Si c'est une modification (ex: "rends ça plus court", "ajoute emojis"), retourne le texte MODIFIÉ.
-- Si c'est une question (ex: "c'est bon?"), réponds normalement.
-- Respecte TOUJOURS le style de ta plateforme (${platform}).
-- Franglais québécois, edgy, sexy.
+Règle : si c'est une modification → retourne le texte modifié. Si c'est une question → réponds normalement.
 
-Réponds en JSON:
+JSON :
 {
-  "aiResponse": "Ta réponse conversationnelle à l'utilisateur",
-  "updatedText": "Le texte modifié (ou null si pas de modification)"
+  "aiResponse": "Ta réponse courte",
+  "updatedText": "Le texte modifié (ou null)"
 }`;
 
     const completion = await openai.chat.completions.create({
