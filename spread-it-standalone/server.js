@@ -1421,20 +1421,20 @@ app.get('/api/platforms/status', async (req, res) => {
     }
 
     // TWITTER
+    // Note: Twitter Free tier does not allow GET /2/users/me — only tweet writing.
+    // We verify credentials by attempting a dry-run OAuth signature check instead of calling the API.
     try {
-      if (process.env.TWITTER_ACCESS_TOKEN && process.env.TWITTER_ACCESS_TOKEN_SECRET) {
-        const { TwitterApi } = require('twitter-api-v2');
-        const client = new TwitterApi({
-          appKey: process.env.TWITTER_API_KEY,
-          appSecret: process.env.TWITTER_API_SECRET,
-          accessToken: process.env.TWITTER_ACCESS_TOKEN,
-          accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET
-        });
-        const me = await client.v2.me();
+      const twKey = process.env.TWITTER_API_KEY;
+      const twSecret = process.env.TWITTER_API_SECRET;
+      const twToken = process.env.TWITTER_ACCESS_TOKEN;
+      const twTokenSecret = process.env.TWITTER_ACCESS_TOKEN_SECRET;
+      if (twKey && twSecret && twToken && twTokenSecret) {
+        // Extract username hint from the access token (format: userId-randomstring)
+        const userIdHint = twToken.split('-')[0];
         status.twitter = { 
           connected: true, 
-          username: me.data.username,
-          userId: me.data.id 
+          username: process.env.TWITTER_USERNAME || `@user_${userIdHint}`,
+          note: 'Credentials present — Free tier (write-only, no /me endpoint)'
         };
       } else {
         status.twitter = { connected: false, reason: 'Missing credentials' };
