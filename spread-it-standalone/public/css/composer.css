@@ -4,9 +4,9 @@
   --surface: #121214;
   --surface-glass: rgba(20, 20, 25, 0.7);
   --border: rgba(255, 255, 255, 0.08);
-  --primary: #3b82f6;
-  --primary-glow: rgba(59, 130, 246, 0.5);
-  --accent: linear-gradient(135deg, #7b61ff, #00d4ff);
+  --primary: #8b5cf6;
+  --primary-glow: rgba(139, 92, 246, 0.5);
+  --accent: linear-gradient(135deg, #8b5cf6, #6366f1);
   --text-main: #ededed;
   --text-muted: #a1a1aa;
   --font-stack: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -19,8 +19,8 @@ body.composer-dark {
   font-family: var(--font-stack);
   background-color: var(--bg);
   background-image: 
-    radial-gradient(circle at 15% 15%, rgba(123, 97, 255, 0.15), transparent 40%),
-    radial-gradient(circle at 85% 85%, rgba(0, 212, 255, 0.1), transparent 40%);
+    radial-gradient(circle at 15% 15%, rgba(139, 92, 246, 0.15), transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(99, 102, 241, 0.1), transparent 40%);
   color: var(--text-main);
   height: 100vh;
   margin: 0;
@@ -143,7 +143,7 @@ body.composer-dark {
   box-shadow: 0 4px 12px rgba(123, 97, 255, 0.3);
   transition: all 0.2s;
 }
-.btn-accent:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(123, 97, 255, 0.4); }
+.btn-accent:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4); }
 
 .btn-ghost {
   background: rgba(255,255,255,0.03); border: 1px solid var(--border);

@@ -7,6 +7,7 @@
   <title><%= title %></title>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/css/composer.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body class="composer-dark">
   <div class="composer-backdrop"></div>
@@ -54,9 +55,9 @@
     border-top: 1px solid #333;
 }
 .message { font-size: 14px; line-height: 1.4; color: #eee; }
-.message.ai .bubble { background: #222; padding: 10px; border-radius: 8px; border-left: 3px solid #3b82f6; }
+.message.ai .bubble { background: #222; padding: 10px; border-radius: 8px; border-left: 3px solid #8b5cf6; }
 .message.user { align-self: flex-end; }
-.message.user .bubble { background: #3b82f6; color: white; padding: 8px 12px; border-radius: 12px 12px 0 12px; }
+.message.user .bubble { background: #8b5cf6; color: white; padding: 8px 12px; border-radius: 12px 12px 0 12px; }
 
 /* PREVIEW DECK GRID */
 .preview-deck {
@@ -247,7 +248,7 @@
     justify-content: flex-end;
 }
 .btn-share-real {
-    background: #3b82f6;
+    background: linear-gradient(135deg, #8b5cf6, #6366f1);
     color: white;
     border: none;
     padding: 8px 20px;
@@ -278,7 +279,7 @@
         </div>
         <div class="chat-input-area">
             <textarea id="userPrompt" class="chat-textarea" placeholder="Votre instruction ici..." style="width:100%; background:#222; color:white; border:none; padding:10px; border-radius:8px;" rows="2"></textarea>
-            <button id="sendMessage" style="width:100%; margin-top:10px; background:#3b82f6; color:white; border:none; padding:10px; border-radius:6px; cursor:pointer">Générer les Previews ➤</button>
+            <button id="sendMessage" style="width:100%; margin-top:10px; background:#8b5cf6; color:white; border:none; padding:10px; border-radius:6px; cursor:pointer">Générer les Previews ➤</button>
         </div>
     </aside>
 
