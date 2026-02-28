@@ -538,7 +538,14 @@ app.get('/api/media-proxy', async (req, res) => {
   if (!isHttps) return res.status(403).send('Only HTTPS URLs allowed');
   try {
     const range = req.headers.range;
-    const headers = { 'User-Agent': 'SpreadIt/1.0' };
+    let origin = '';
+    try { origin = new URL(url).origin; } catch(e) {}
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (compatible; SpreadIt/1.0)',
+      'Accept': 'video/*, image/*, */*',
+      'Referer': origin,
+      'Origin': origin
+    };
     if (range) headers['Range'] = range;
     const upstream = await fetch(url, { headers });
     const contentType = upstream.headers.get('content-type') || 'video/mp4';

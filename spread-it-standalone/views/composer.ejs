@@ -590,14 +590,28 @@
     if(sendBtn) sendBtn.addEventListener('click', () => handleSend());
 
     // Proxy CDN video through Render to bypass CORS (preview only — original URL still published)
-    // Images don't need proxying — only <video> triggers CORS issues
     function proxyUrl(url, type) {
-      if (!url || type !== 'video') return url;
-      // Proxy all external video URLs through Render to bypass CORS
+      if (!url) return url;
       if (url.startsWith('http')) {
         return '/api/media-proxy?url=' + encodeURIComponent(url);
       }
       return url;
+    }
+
+    // Inject media into all preview cards immediately (no wait for AI)
+    function injectMediaToCards() {
+      const vUrl = window.CURRENT_VIDEO_URL;
+      const iUrl = window.CURRENT_POSTER;
+      if (!vUrl && !iUrl) return;
+      document.querySelectorAll('.media-area, .media-container').forEach(function(area) {
+        area.innerHTML = '';
+        if (vUrl) {
+          const posterAttr = iUrl ? 'poster="' + proxyUrl(iUrl, 'image') + '"' : '';
+          area.innerHTML = '<video src="' + proxyUrl(vUrl, 'video') + '" controls playsinline loop ' + posterAttr + ' style="width:100%;height:100%;object-fit:cover;max-height:500px;display:block;background:#000" onerror="this.style.display=\'none\'"></video>';
+        } else {
+          area.innerHTML = '<img src="' + proxyUrl(iUrl, 'image') + '" style="width:100%;height:auto;display:block;object-fit:cover" onerror="this.style.display=\'none\'">';
+        }
+      });
     }
 
     // Read short-lived auth token passed by integration.js in the iframe URL
@@ -626,6 +640,9 @@
              window.CURRENT_POSTER = posterUrl;
              window.CURRENT_VIDEO_URL = null; // Explicitly nullify
         }
+
+        // Inject media immediately into all cards — don't wait for AI
+        injectMediaToCards();
 
         if(title) window.CURRENT_TITLE = title;
         
