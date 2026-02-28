@@ -593,7 +593,8 @@
     // Images don't need proxying — only <video> triggers CORS issues
     function proxyUrl(url, type) {
       if (!url || type !== 'video') return url;
-      if (url.includes('b-cdn.net') || url.includes('bunnycdn.com')) {
+      // Proxy all external video URLs through Render to bypass CORS
+      if (url.startsWith('http')) {
         return '/api/media-proxy?url=' + encodeURIComponent(url);
       }
       return url;

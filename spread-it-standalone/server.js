@@ -533,10 +533,10 @@ app.get('/api/media-proxy', async (req, res) => {
   const url = req.query.url;
   if (!url) return res.status(400).send('Missing url');
   // Only allow trusted CDN domains
-  const allowed = ['b-cdn.net', 'bunnycdn.com', 'vz-72668a20-6b9.b-cdn.net', 'vz-c69f4e3f-963.b-cdn.net'];
-  let isAllowed = false;
-  try { isAllowed = allowed.some(d => new URL(url).hostname.endsWith(d)); } catch(e) {}
-  if (!isAllowed) return res.status(403).send('Domain not allowed');
+  // Allow any https URL for video proxying (CORS bypass for preview)
+  let isHttps = false;
+  try { isHttps = new URL(url).protocol === 'https:'; } catch(e) {}
+  if (!isHttps) return res.status(403).send('Only HTTPS URLs allowed');
   try {
     const range = req.headers.range;
     const headers = { 'User-Agent': 'SpreadIt/1.0' };
