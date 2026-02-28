@@ -3566,7 +3566,7 @@ app.get('/auth/youtube/callback', async (req, res) => {
 app.get('/auth/tiktok/start', (req, res) => {
   const clientKey = process.env.TIKTOK_CLIENT_KEY;
   const redirectUri = process.env.TIKTOK_REDIRECT_URI || `${getBaseUrl(req)}/auth/tiktok/callback`;
-  const scope = 'user.info.basic,video.publish';
+  const scope = 'user.info.basic,video.publish,video.upload';
   const state = randomUUID();
   
   req.session.tiktokState = state;
