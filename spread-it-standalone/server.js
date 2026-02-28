@@ -273,7 +273,8 @@ try {
     }
     sessionStore = new FileStore({
       path: fileStorePath,
-      retries: 1
+      retries: 0,
+      logFn: () => {}  // silence ENOENT retry noise for unknown sessions
     });
     sessionStoreName = 'file';
   } catch (fileError) {
