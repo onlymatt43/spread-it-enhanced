@@ -571,6 +571,49 @@ app.get('/api/media-proxy', async (req, res) => {
   }
 });
 
+// Preflight URL checker: verifies reachability and basic media metadata
+app.get('/api/check-url', async (req, res) => {
+  const url = req.query.url;
+  if (!url) return res.status(400).json({ error: 'Missing url' });
+  let isHttps = false;
+  try { isHttps = new URL(url).protocol === 'https:'; } catch(e) {}
+  if (!isHttps) return res.status(400).json({ error: 'Only HTTPS URLs supported' });
+
+  try {
+    let origin = '';
+    try { origin = new URL(url).origin; } catch(e) {}
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (compatible; SpreadIt/1.0)',
+      'Accept': 'video/*, image/*, */*',
+      'Referer': origin,
+      'Origin': origin
+    };
+
+    // Try HEAD first
+    let upstream = null;
+    let status = 0;
+    try {
+      upstream = await fetch(url, { method: 'HEAD', headers, redirect: 'follow' });
+      status = upstream.status;
+      if (status >= 400) throw new Error('HEAD failed');
+    } catch (e) {
+      // Fallback: GET partial to probe content-type and size
+      upstream = await fetch(url, { method: 'GET', headers: { ...headers, Range: 'bytes=0-1023' }, redirect: 'follow' });
+      status = upstream.status;
+      if (status >= 400) return res.json({ reachable: false, status });
+    }
+
+    const contentType = upstream.headers.get('content-type') || null;
+    const contentLength = upstream.headers.get('content-length') || null;
+    const mediaType = contentType ? (contentType.startsWith('video') ? 'video' : (contentType.startsWith('image') ? 'image' : 'other')) : 'unknown';
+
+    return res.json({ reachable: true, status, contentType, size: contentLength, mediaType });
+  } catch (e) {
+    console.error('[check-url]', e.message);
+    return res.json({ reachable: false, error: e.message });
+  }
+});
+
 app.get('/auth/google/start',
   (req, res, next) => {
     if (!googleAuthEnabled) return res.redirect('/login?error=Google+Auth+non+configuré');
