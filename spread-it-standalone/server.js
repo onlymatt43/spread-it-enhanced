@@ -3449,7 +3449,7 @@ app.get('/auth/youtube/start', (req, res) => {
   const oauth2Client = new google.auth.OAuth2(
     process.env.YOUTUBE_CLIENT_ID,
     process.env.YOUTUBE_CLIENT_SECRET,
-    `${req.protocol}://${req.get('host')}/auth/youtube/callback`
+    `${getBaseUrl(req)}/auth/youtube/callback`
   );
 
   const scopes = [
@@ -3485,7 +3485,7 @@ app.get('/auth/youtube/callback', async (req, res) => {
     const oauth2Client = new google.auth.OAuth2(
       process.env.YOUTUBE_CLIENT_ID,
       process.env.YOUTUBE_CLIENT_SECRET,
-      `${req.protocol}://${req.get('host')}/auth/youtube/callback`
+      `${getBaseUrl(req)}/auth/youtube/callback`
     );
 
     const { tokens } = await oauth2Client.getToken(code);
