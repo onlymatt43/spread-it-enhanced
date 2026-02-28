@@ -1445,7 +1445,6 @@ app.get('/api/learning-dashboard', async (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  if (req.isAuthenticated()) return res.redirect('/spreads');
   res.render('index', {
     title: 'Spread It — Partagez partout',
     googleVerification: process.env.GOOGLE_SITE_VERIFICATION || ''

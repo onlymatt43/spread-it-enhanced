@@ -362,11 +362,26 @@
         <script>
         // ── Composer modal ──────────────────────────────────────────────────
         function showComposer(url) {
-            var modal = document.getElementById('composerModal');
-            var frame = document.getElementById('composerFrame');
-            frame.src = url;
-            modal.style.display = 'flex';
-            document.body.style.overflow = 'hidden';
+            fetch('/api/auth/issue-token')
+                .then(function(r) { return r.ok ? r.json() : null; })
+                .then(function(data) {
+                    if (data && data.token) {
+                        var sep = url.indexOf('?') >= 0 ? '&' : '?';
+                        url = url + sep + 'si_token=' + encodeURIComponent(data.token);
+                    }
+                    var modal = document.getElementById('composerModal');
+                    var frame = document.getElementById('composerFrame');
+                    frame.src = url;
+                    modal.style.display = 'flex';
+                    document.body.style.overflow = 'hidden';
+                })
+                .catch(function() {
+                    var modal = document.getElementById('composerModal');
+                    var frame = document.getElementById('composerFrame');
+                    frame.src = url;
+                    modal.style.display = 'flex';
+                    document.body.style.overflow = 'hidden';
+                });
         }
         function hideComposer() {
             var modal = document.getElementById('composerModal');
