@@ -41,6 +41,8 @@ const { fetchTrendingTopics } = require('./services/trending');
 const turso = require('./db/turso');
 const { TwitterApi } = require('twitter-api-v2'); // Ajout pour Twitter
 const FormData = require('form-data'); // Ajout pour Facebook Upload
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { spawn } = require('child_process');
 
 // Nouveaux Services d'Intelligence
@@ -410,6 +412,61 @@ app.use(session({
   }
 }));
 
+// ── GOOGLE AUTH (passport) ──────────────────────────────────────────
+const ALLOWED_EMAIL = process.env.ALLOWED_EMAIL; // ton Gmail dans Render
+
+passport.use(new GoogleStrategy({
+  clientID:     process.env.GOOGLE_AUTH_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_AUTH_CLIENT_SECRET,
+  callbackURL:  `${process.env.APP_BASE_URL || ''}/auth/google/callback`
+}, (accessToken, refreshToken, profile, done) => {
+  const email = profile.emails && profile.emails[0] && profile.emails[0].value;
+  if (ALLOWED_EMAIL && email !== ALLOWED_EMAIL) {
+    return done(null, false, { message: 'Email non autorisé' });
+  }
+  return done(null, { id: profile.id, email, name: profile.displayName, photo: profile.photos?.[0]?.value });
+}));
+
+passport.serializeUser((user, done) => done(null, user));
+passport.deserializeUser((user, done) => done(null, user));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Middleware : protège les routes privées
+const requireAuth = (req, res, next) => {
+  if (req.isAuthenticated()) return next();
+  // API calls → JSON error
+  if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Non authentifié' });
+  // Pages → redirect login
+  req.session.returnTo = req.originalUrl;
+  res.redirect('/login');
+};
+
+// Routes Google OAuth
+app.get('/login', (req, res) => {
+  if (req.isAuthenticated()) return res.redirect('/');
+  res.render('login', { error: req.query.error || null });
+});
+
+app.get('/auth/google/start',
+  passport.authenticate('google', { scope: ['email', 'profile'] })
+);
+
+app.get('/auth/google/callback',
+  passport.authenticate('google', { failureRedirect: '/login?error=Email+non+autorisé' }),
+  (req, res) => {
+    const returnTo = req.session.returnTo || '/';
+    delete req.session.returnTo;
+    res.redirect(returnTo);
+  }
+);
+
+app.get('/logout', (req, res) => {
+  req.logout(() => res.redirect('/login'));
+});
+// ────────────────────────────────────────────────────────────────────
+
 // Configuration EJS
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -472,7 +529,7 @@ try {
 }
 
 // --- NEW ENDPOINT: Handles the actual submission from the popup ---
-app.post('/api/smart-share-submit', express.json(), async (req, res) => {
+app.post('/api/smart-share-submit', requireAuth, express.json(), async (req, res) => {
     // Définition de tempFilePath en dehors du try pour accès dans finally
     let tempFilePath = null;
 
@@ -912,7 +969,7 @@ app.post('/api/smart-share-submit', express.json(), async (req, res) => {
     }
 });
 
-app.post('/api/create-post-ai', express.json(), async (req, res) => {
+app.post('/api/create-post-ai', requireAuth, express.json(), async (req, res) => {
     try {
         const { content, options, mediaUrl, mediaType } = req.body;
         
@@ -993,7 +1050,7 @@ app.post('/api/create-post-ai', express.json(), async (req, res) => {
 });
 
 // Edit AI section with instruction, preserving locked text (server-side guard)
-app.post('/api/ai-edit', express.json(), async (req, res) => {
+app.post('/api/ai-edit', requireAuth, express.json(), async (req, res) => {
   try {
     const { platform = 'facebook', instruction = '', lockedText = '', aiText = '' } = req.body || {};
     const base = aiText || '';
@@ -1058,15 +1115,14 @@ app.get('/api/learning-dashboard', async (req, res) => {
     }
 });
 
-app.get('/', (req, res) => {
-  // Redirect to spreads grid (new default interface)
+app.get('/', requireAuth, (req, res) => {
   res.redirect('/spreads');
 });
 
 // --- ROUTES LÉGALES (POUR FACEBOOK APP REVIEW) ---
 app.get('/privacy', (req, res) => res.render('privacy'));
 app.get('/terms', (req, res) => res.render('terms'));
-app.get('/reaction', (req, res) => res.render('reaction')); // New Reaction Mode
+app.get('/reaction', requireAuth, (req, res) => res.render('reaction')); // New Reaction Mode
 app.get('/data-deletion', (req, res) => res.render('data_deletion'));
 // Je remets la route /verify comme demandé
 app.get('/verify', (req, res) => {
@@ -1158,12 +1214,12 @@ app.get('/auth/tiktok/callback', async (req, res) => {
     }
 });
 
-app.get('/create', (req, res) => {
+app.get('/create', requireAuth, (req, res) => {
   res.redirect('/composer');
 });
 
 // New composer UI (Standalone) - stack cards + AI chat popup
-app.get('/composer', (req, res) => {
+app.get('/composer', requireAuth, (req, res) => {
   const configured = {
       linkedin: !!(process.env.LINKEDIN_ACCESS_TOKEN || (req.session.tokens && req.session.tokens.linkedin)),
       facebook: !!(process.env.FACEBOOK_ACCESS_TOKEN || (req.session.tokens && req.session.tokens.facebook)),
@@ -1181,7 +1237,7 @@ app.get('/composer', (req, res) => {
 });
 
 // NEW: Spread Grid View - stacked mockups interface
-app.get('/spreads', (req, res) => {
+app.get('/spreads', requireAuth, (req, res) => {
   try {
     // Load spreads from Turso DB
     const spreads = turso.all('SELECT * FROM spreads ORDER BY created_at DESC', []);
@@ -1215,7 +1271,7 @@ app.get('/spreads', (req, res) => {
 });
 
 // NEW: Create Spread Modal - triggered from media
-app.get('/create-spread', (req, res) => {
+app.get('/create-spread', requireAuth, (req, res) => {
   res.render('create-spread-modal', {
     title: 'Create Spread - Spread It',
     user: req.session.user
@@ -1365,7 +1421,7 @@ app.post('/api/create-spread', express.json(), async (req, res) => {
 });
 
 // NEW: Check Platform Connection Status
-app.get('/api/platforms/status', async (req, res) => {
+app.get('/api/platforms/status', requireAuth, async (req, res) => {
   try {
     const status = {};
 
@@ -3194,7 +3250,7 @@ function updateEnvFile(key, value) {
 // -------------------------------------------------------------------
 // AUTH SETUP PAGE
 // -------------------------------------------------------------------
-app.get('/auth/setup', async (req, res) => {
+app.get('/auth/setup', requireAuth, async (req, res) => {
   try {
     // Get current platform statuses
     const statusEndpoint = req.protocol + '://' + req.get('host') + '/api/platforms/status';
